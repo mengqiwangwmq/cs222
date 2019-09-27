@@ -29,6 +29,19 @@ RC PagedFileManager::createFile(const std::string &fileName) {
     if (check_file_exist(fileName)) {
         return -1;
     }
+    std::ofstream fs(fileName);
+    char *hiddenPage = new char[PAGE_SIZE];
+
+    unsigned cache = 0;
+    // Allocate space for readPageCounter
+    memcpy(hiddenPage, &cache, sizeof(unsigned));
+    // Allocate space for writePageCounter
+    memcpy(hiddenPage + sizeof(unsigned), &cache, sizeof(unsigned));
+    // Allocate space for appendPageCounter
+    memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
+
+    fs.write(hiddenPage, PAGE_SIZE);
+    fs.close();
     return 0;
 }
 

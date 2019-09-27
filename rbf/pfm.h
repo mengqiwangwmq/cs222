@@ -9,6 +9,7 @@ typedef unsigned char byte;
 
 #include <string>
 #include <climits>
+#include <fstream>
 
 class FileHandle;
 
