@@ -65,7 +65,8 @@ RC PagedFileManager::openFile(const std::string &fileName, FileHandle &fileHandl
 }
 
 RC PagedFileManager::closeFile(FileHandle &fileHandle) {
-    return -1;
+    // return -1;
+    fileHandle.fhfs.close();
 }
 
 FileHandle::FileHandle() {
@@ -77,7 +78,15 @@ FileHandle::FileHandle() {
 FileHandle::~FileHandle() = default;
 
 RC FileHandle::readPage(PageNum pageNum, void *data) {
-    return -1;
+    // Check if page requested exists or not
+    if(pageNum > this->getNumberOfPages()) {
+        return -1;
+    }
+
+    // Skip hiddenPage
+    fhfs.seekg((pageNum+1) * PAGE_SIZE);
+    char * ptr = static_cast<char *>(data);
+    fhfs.read(ptr, PAGE_SIZE);
 }
 
 RC FileHandle::writePage(PageNum pageNum, const void *data) {
