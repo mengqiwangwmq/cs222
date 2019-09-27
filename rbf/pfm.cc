@@ -27,7 +27,7 @@ bool fileExist(const std::string &fileName) {
 
 RC PagedFileManager::createFile(const std::string &fileName) {
     if (fileExist(fileName)) {
-        return -1;
+        return -2; //FileDuplicateException
     }
     std::ofstream fs(fileName);
     char *hiddenPage = new char[PAGE_SIZE];
@@ -47,14 +47,21 @@ RC PagedFileManager::createFile(const std::string &fileName) {
 
 RC PagedFileManager::destroyFile(const std::string &fileName) {
     if (!fileExist(fileName)) {
-        return -1;
+        return -1; //FileNotFoundException
     }
     remove(fileName.c_str());
     return 0;
 }
 
 RC PagedFileManager::openFile(const std::string &fileName, FileHandle &fileHandle) {
-    return -1;
+    if (!fileExist(fileName)) {
+        return -1; //FileNotFoundException
+    }
+    RC flag = fileHandle.setFile(fileName);
+    if (flag != 0) {
+        return flag;
+    }
+    //TODO: implement read counter
 }
 
 RC PagedFileManager::closeFile(FileHandle &fileHandle) {
@@ -87,4 +94,23 @@ unsigned FileHandle::getNumberOfPages() {
 
 RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount) {
     return -1;
+}
+
+RC FileHandle::setFile(const std::string &fileName) {
+    if (fileHandleOccupied()) {
+        return -3; //FStreamOccupiedException
+    }
+    try {
+        fs.open(fileName);
+    } catch (std::fstream::failure &err) {
+        return 1;
+    }
+    return 0;
+}
+bool FileHandle::fileHandleOccupied() {
+    if (fs) {
+        return false;
+    } else {
+        return true;
+    }
 }

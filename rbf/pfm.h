@@ -48,6 +48,10 @@ public:
     unsigned getNumberOfPages();                                        // Get the number of pages in the file
     RC collectCounterValues(unsigned &readPageCount, unsigned &writePageCount,
                             unsigned &appendPageCount);                 // Put current counter values into variables
+    RC setFile(const std::string &fileName);
+private:
+    std::fstream fs;
+    bool fileHandleOccupied();
 };
 
 #endif
