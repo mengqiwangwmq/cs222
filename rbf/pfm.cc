@@ -15,7 +15,7 @@ PagedFileManager::PagedFileManager(const PagedFileManager &) = default;
 
 PagedFileManager &PagedFileManager::operator=(const PagedFileManager &) = default;
 
-bool check_file_exist(const std::string &fileName) {
+bool fileExist(const std::string &fileName) {
     FILE *file = fopen(fileName.c_str(), "r");
     if (file) {
         fclose(file);
@@ -26,7 +26,7 @@ bool check_file_exist(const std::string &fileName) {
 }
 
 RC PagedFileManager::createFile(const std::string &fileName) {
-    if (check_file_exist(fileName)) {
+    if (fileExist(fileName)) {
         return -1;
     }
     std::ofstream fs(fileName);
@@ -46,7 +46,11 @@ RC PagedFileManager::createFile(const std::string &fileName) {
 }
 
 RC PagedFileManager::destroyFile(const std::string &fileName) {
-    return -1;
+    if (!fileExist(fileName)) {
+        return -1;
+    }
+    remove(fileName.c_str());
+    return 0;
 }
 
 RC PagedFileManager::openFile(const std::string &fileName, FileHandle &fileHandle) {
