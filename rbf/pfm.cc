@@ -87,6 +87,11 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
     fhfs.seekg((pageNum+1) * PAGE_SIZE);
     char * ptr = static_cast<char *>(data);
     fhfs.read(ptr, PAGE_SIZE);
+
+    // Update counters
+    this->readPageCounter ++;
+    fhfs.seekg(0);
+    fhfs.write((char*)readPageCounter, sizeof(unsigned));
 }
 
 RC FileHandle::writePage(PageNum pageNum, const void *data) {
