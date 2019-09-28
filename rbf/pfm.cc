@@ -65,8 +65,6 @@ RC PagedFileManager::openFile(const std::string &fileName, FileHandle &fileHandl
 }
 
 RC PagedFileManager::closeFile(FileHandle &fileHandle) {
-    // return -1;
-    fileHandle.fhfs.close();
 }
 
 FileHandle::FileHandle() {
@@ -84,14 +82,12 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
     }
 
     // Skip hiddenPage
-    fhfs.seekg((pageNum+1) * PAGE_SIZE);
+    fs.seekg((pageNum+1) * PAGE_SIZE);
     char * ptr = static_cast<char *>(data);
-    fhfs.read(ptr, PAGE_SIZE);
+    fs.read(ptr, PAGE_SIZE);
 
     // Update counters
     this->readPageCounter ++;
-    fhfs.seekg(0);
-    fhfs.write((char*)readPageCounter, sizeof(unsigned));
 }
 
 RC FileHandle::writePage(PageNum pageNum, const void *data) {
@@ -103,11 +99,15 @@ RC FileHandle::appendPage(const void *data) {
 }
 
 unsigned FileHandle::getNumberOfPages() {
-    return -1;
+    fs.seekg(0, fs.end);
+    return fs.tellg() / PAGE_SIZE - 1;
 }
 
 RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount) {
-    return -1;
+    readPageCount = this->readPageCounter;
+    writePageCount = this->writePageCounter;
+    appendPageCount = this->appendPageCounter;
+    return 0;
 }
 
 RC FileHandle::setFile(const std::string &fileName) {
