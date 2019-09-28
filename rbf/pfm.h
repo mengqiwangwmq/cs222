@@ -48,9 +48,10 @@ public:
     unsigned getNumberOfPages();                                        // Get the number of pages in the file
     RC collectCounterValues(unsigned &readPageCount, unsigned &writePageCount,
                             unsigned &appendPageCount);                 // Put current counter values into variables
+    RC updateCounterValues();                                           // Update current counter values into hidden page
     RC setFile(const std::string &fileName);
 private:
-    std::fstream fs;
+    FILE *fpt;
     bool fileHandleOccupied();
 };
 
