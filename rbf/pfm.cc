@@ -96,10 +96,11 @@ RC FileHandle::writePage(PageNum pageNum, const void *data) {
     if (pageNum >= this->getNumberOfPages()) {
         return -1;
     }
-    fseek(fpt, (pageNum + 1), SEEK_SET);
+    fseek(fpt, (pageNum + 1) * PAGE_SIZE, SEEK_SET);
     fwrite(data, sizeof(char), PAGE_SIZE, fpt);
     this->writePageCounter++;
     this->updateCounterValues();
+    return 0;
 }
 
 RC FileHandle::appendPage(const void *data) {
@@ -142,10 +143,6 @@ RC FileHandle::setFile(const std::string &fileName) {
     memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
     memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
     memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
-
-    // Update counters
-    this->readPageCounter++;
-    this->updateCounterValues();
     return 0;
 }
 
