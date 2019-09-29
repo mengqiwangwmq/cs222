@@ -50,6 +50,7 @@ public:
                             unsigned &appendPageCount);                 // Put current counter values into variables
     RC updateCounterValues();                                           // Update current counter values into hidden page
     RC setFile(const std::string &fileName);
+    RC closeFile();
 private:
     FILE *fpt;
     bool fileHandleOccupied();

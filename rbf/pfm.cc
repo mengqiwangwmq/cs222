@@ -61,6 +61,7 @@ RC PagedFileManager::openFile(const std::string &fileName, FileHandle &fileHandl
 }
 
 RC PagedFileManager::closeFile(FileHandle &fileHandle) {
+    return fileHandle.closeFile();
 }
 
 FileHandle::FileHandle() {
@@ -91,11 +92,23 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
 }
 
 RC FileHandle::writePage(PageNum pageNum, const void *data) {
-    return -1;
+    // return -1;
+    // Check if page to be written exists
+    if(pageNum >= this->getNumberOfPages()) {
+        return -1;
+    }
+    fseek(fpt, (pageNum+1), SEEK_SET);
+    fwrite(data, sizeof(char), PAGE_SIZE, fpt);
+    this->writePageCounter ++;
+    this->updateCounterValues();
 }
 
 RC FileHandle::appendPage(const void *data) {
-    return -1;
+    // return -1;
+    fseek(fpt, 0, SEEK_END);
+    fwrite(data, sizeof(char), PAGE_SIZE, fpt);
+    this->appendPageCounter ++;
+    this->updateCounterValues();
 }
 
 unsigned FileHandle::getNumberOfPages() {
@@ -110,7 +123,13 @@ RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePage
     return 0;
 }
 RC FileHandle::updateCounterValues() {
-    return -1;
+    // return -1;
+    fseek(fpt, 0, SEEK_SET);
+    fputs((char *)this->readPageCounter, fpt);
+    fseek(fpt, sizeof(unsigned), SEEK_SET);
+    fputs((char *)this->writePageCounter, fpt);
+    fseek(fpt, 2 * sizeof(unsigned), SEEK_SET);
+    fputs((char *)appendPageCounter, fpt);
 }
 
 RC FileHandle::setFile(const std::string &fileName) {
@@ -124,6 +143,15 @@ RC FileHandle::setFile(const std::string &fileName) {
     memcpy(&this->writePageCounter, (char *)cache + sizeof(unsigned), sizeof(unsigned));
     memcpy(&this->appendPageCounter, (char *)cache + 2 * sizeof(unsigned), sizeof(unsigned));
     return 0;
+}
+
+RC FileHandle::closeFile() {
+    if(fpt) {
+        this->updateCounterValues();
+        fclose(fpt);
+        return 0;
+    }
+    return -4;  // Error in opening/closing/reading files
 }
 
 bool FileHandle::fileHandleOccupied() {
