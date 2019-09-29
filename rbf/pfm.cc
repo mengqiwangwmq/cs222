@@ -94,12 +94,12 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
 RC FileHandle::writePage(PageNum pageNum, const void *data) {
     // return -1;
     // Check if page to be written exists
-    if(pageNum >= this->getNumberOfPages()) {
+    if (pageNum >= this->getNumberOfPages()) {
         return -1;
     }
-    fseek(fpt, (pageNum+1), SEEK_SET);
+    fseek(fpt, (pageNum + 1), SEEK_SET);
     fwrite(data, sizeof(char), PAGE_SIZE, fpt);
-    this->writePageCounter ++;
+    this->writePageCounter++;
     this->updateCounterValues();
 }
 
@@ -107,7 +107,7 @@ RC FileHandle::appendPage(const void *data) {
     // return -1;
     fseek(fpt, 0, SEEK_END);
     fwrite(data, sizeof(char), PAGE_SIZE, fpt);
-    this->appendPageCounter ++;
+    this->appendPageCounter++;
     this->updateCounterValues();
 }
 
@@ -122,14 +122,15 @@ RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePage
     appendPageCount = this->appendPageCounter;
     return 0;
 }
+
 RC FileHandle::updateCounterValues() {
-    // return -1;
     fseek(fpt, 0, SEEK_SET);
-    fputs((char *)this->readPageCounter, fpt);
+    fwrite(&this->readPageCounter, sizeof(char), sizeof(unsigned), fpt);
     fseek(fpt, sizeof(unsigned), SEEK_SET);
-    fputs((char *)this->writePageCounter, fpt);
+    fwrite(&this->writePageCounter, sizeof(char), sizeof(unsigned), fpt);
     fseek(fpt, 2 * sizeof(unsigned), SEEK_SET);
-    fputs((char *)appendPageCounter, fpt);
+    fwrite(&this->appendPageCounter, sizeof(char), sizeof(unsigned), fpt);
+    return 0;
 }
 
 RC FileHandle::setFile(const std::string &fileName) {
@@ -139,14 +140,14 @@ RC FileHandle::setFile(const std::string &fileName) {
     fpt = fopen(fileName.c_str(), "r+");
     void *cache = malloc(PAGE_SIZE);
     this->readPage(-1, cache);
-    memcpy(&this->readPageCounter, (char *)cache, sizeof(unsigned));
-    memcpy(&this->writePageCounter, (char *)cache + sizeof(unsigned), sizeof(unsigned));
-    memcpy(&this->appendPageCounter, (char *)cache + 2 * sizeof(unsigned), sizeof(unsigned));
+    memcpy(&this->readPageCounter, (char *) cache, sizeof(unsigned));
+    memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
+    memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
     return 0;
 }
 
 RC FileHandle::closeFile() {
-    if(fpt) {
+    if (fpt) {
         this->updateCounterValues();
         fclose(fpt);
         return 0;
