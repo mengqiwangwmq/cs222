@@ -43,6 +43,7 @@ public:
     ~FileHandle();                                                      // Destructor
 
     RC readPage(PageNum pageNum, void *data);                           // Get a specific page
+    RC readHiddenPage(void *data);                                      // Read counter values
     RC writePage(PageNum pageNum, const void *data);                    // Write a specific page
     RC appendPage(const void *data);                                    // Append a specific page
     unsigned getNumberOfPages();                                        // Get the number of pages in the file

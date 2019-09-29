@@ -92,7 +92,6 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
 }
 
 RC FileHandle::writePage(PageNum pageNum, const void *data) {
-    // return -1;
     // Check if page to be written exists
     if (pageNum >= this->getNumberOfPages()) {
         return -1;
@@ -104,11 +103,11 @@ RC FileHandle::writePage(PageNum pageNum, const void *data) {
 }
 
 RC FileHandle::appendPage(const void *data) {
-    // return -1;
     fseek(fpt, 0, SEEK_END);
     fwrite(data, sizeof(char), PAGE_SIZE, fpt);
     this->appendPageCounter++;
     this->updateCounterValues();
+    return 0;
 }
 
 unsigned FileHandle::getNumberOfPages() {
@@ -125,11 +124,11 @@ RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePage
 
 RC FileHandle::updateCounterValues() {
     fseek(fpt, 0, SEEK_SET);
-    fwrite(&this->readPageCounter, sizeof(char), sizeof(unsigned), fpt);
+    fwrite(&this->readPageCounter, sizeof(unsigned), 1, fpt);
     fseek(fpt, sizeof(unsigned), SEEK_SET);
-    fwrite(&this->writePageCounter, sizeof(char), sizeof(unsigned), fpt);
+    fwrite(&this->writePageCounter, sizeof(unsigned), 1, fpt);
     fseek(fpt, 2 * sizeof(unsigned), SEEK_SET);
-    fwrite(&this->appendPageCounter, sizeof(char), sizeof(unsigned), fpt);
+    fwrite(&this->appendPageCounter, sizeof(unsigned), 1, fpt);
     return 0;
 }
 
@@ -138,11 +137,22 @@ RC FileHandle::setFile(const std::string &fileName) {
         return -3; //FilePointerOccupiedException
     }
     fpt = fopen(fileName.c_str(), "r+");
-    void *cache = malloc(PAGE_SIZE);
-    this->readPage(-1, cache);
-    memcpy(&this->readPageCounter, (char *) cache, sizeof(unsigned));
+    void *cache = malloc(PAGE_SIZE * sizeof(char));
+    this->readHiddenPage(cache);
+    memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
     memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
     memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
+
+    // Update counters
+    this->readPageCounter++;
+    this->updateCounterValues();
+    return 0;
+}
+
+RC FileHandle::readHiddenPage(void *data) {
+    fseek(fpt, 0, SEEK_SET);
+    char *ptr = static_cast<char *>(data);
+    fread(ptr, sizeof(char), PAGE_SIZE, fpt);
     return 0;
 }
 
