@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <climits>
+#include <iostream>
+#include <cmath>
 
 #include "pfm.h"
 

@@ -21,3 +21,10 @@ If you are not using CLion and want to use command line make tool:
    The program should run. But it will generates an error. You are supposed to
    implement the API of the paged file manager defined in pfm.h and some
    of the methods in rbfm.h as explained in the project description.
+   
+# Development Notes
+## Error Handling
+* FileNotFoundException: -1
+* FileDuplicateException: -2
+* FileOpException: -3;
+* FileHandleOccupiedException: -4;

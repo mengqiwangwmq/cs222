@@ -1,8 +1,4 @@
 #include "rbfm.h"
-#include "test_util.h"
-#include <iostream>
-
-using namespace std;
 
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = nullptr;
 
@@ -52,13 +48,12 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const std::vecto
 }
 
 RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescriptor, const void *data) {
-    // return -1;
     // Get nullFieldIndicator
-    int nullFieldByteLength = getActualByteForNullsIndicator(recordDescriptor.size());
+    int nullFieldByteLength = ceil((double) recordDescriptor.size() / CHAR_BIT);
     unsigned char * nullFieledsIndicator = (unsigned char *)malloc(nullFieldByteLength);
     memcpy(nullFieledsIndicator, (char *)data, nullFieldByteLength);
     int offset = nullFieldByteLength;
-    cout<<"print records"<<endl;
+    std::cout<<"print records"<<std::endl;
     for(int i = 0; i < recordDescriptor.size(); i ++) {
         // Check if field is null
         Attribute attr = recordDescriptor[i];
@@ -68,13 +63,13 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
                 int value;
                 memcpy(&value, (char *)data + offset, attr.length);
                 offset += attr.length;
-                cout<<attr.name.c_str()<<": "<<value<<endl;
+                std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
             }
             if(attr.type == TypeReal) {
                 float value;
                 memcpy(&value, (char *)data + offset, attr.length);
                 offset += attr.length;
-                cout<<attr.name.c_str()<<": "<<value<<endl;
+                std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
             }
             if(attr.type == TypeVarChar) {
                 int length;
@@ -82,9 +77,9 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
                 memcpy(&length, (char *)data + offset, sizeof(int));
                 offset += sizeof(int);
                 memcpy(&value, (char *)data + offset, length);
-                cout<<attr.name.c_str()<<": "<<value<<endl;
+                std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
             } else {
-                cout<<attr.name<<": "<<"Null"<<endl;
+                std::cout<<attr.name<<": "<<"Null"<<std::endl;
             }
         }
     }

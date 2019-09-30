@@ -30,19 +30,22 @@ RC PagedFileManager::createFile(const std::string &fileName) {
         return -2; //FileDuplicateException
     }
     FILE *file = fopen(fileName.c_str(), "w");
-    char *hiddenPage = new char[PAGE_SIZE];
+    if (file) {
+        char *hiddenPage = new char[PAGE_SIZE];
 
-    unsigned cache = 0;
-    // Allocate space for readPageCounter
-    memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
-    // Allocate space for writePageCounter
-    memcpy(hiddenPage + 1 * sizeof(unsigned), &cache, sizeof(unsigned));
-    // Allocate space for appendPageCounter
-    memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
+        unsigned cache = 0;
+        // Allocate space for readPageCounter
+        memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
+        // Allocate space for writePageCounter
+        memcpy(hiddenPage + 1 * sizeof(unsigned), &cache, sizeof(unsigned));
+        // Allocate space for appendPageCounter
+        memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
 
-    fwrite(hiddenPage, sizeof(char), PAGE_SIZE, file);
-    fclose(file);
-    return 0;
+        fwrite(hiddenPage, sizeof(char), PAGE_SIZE, file);
+        fclose(file);
+        return 0;
+    }
+    return -3; //FileOpException
 }
 
 RC PagedFileManager::destroyFile(const std::string &fileName) {
@@ -68,6 +71,7 @@ FileHandle::FileHandle() {
     readPageCounter = 0;
     writePageCounter = 0;
     appendPageCounter = 0;
+    fpt = nullptr;
 }
 
 FileHandle::~FileHandle() {
@@ -135,15 +139,18 @@ RC FileHandle::updateCounterValues() {
 
 RC FileHandle::setFile(const std::string &fileName) {
     if (fileHandleOccupied()) {
-        return -3; //FilePointerOccupiedException
+        return -4; //FileHandleOccupiedException
     }
     fpt = fopen(fileName.c_str(), "r+");
-    void *cache = malloc(PAGE_SIZE * sizeof(char));
-    this->readHiddenPage(cache);
-    memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
-    memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
-    memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
-    return 0;
+    if (fpt) {
+        void *cache = malloc(PAGE_SIZE * sizeof(char));
+        this->readHiddenPage(cache);
+        memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
+        memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
+        memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
+        return 0;
+    }
+    return -3;
 }
 
 RC FileHandle::readHiddenPage(void *data) {
@@ -159,7 +166,7 @@ RC FileHandle::closeFile() {
         fclose(fpt);
         return 0;
     }
-    return -4;  // Error in opening/closing/reading files
+    return -3;  // FileOpException
 }
 
 bool FileHandle::fileHandleOccupied() {
