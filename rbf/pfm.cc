@@ -38,11 +38,11 @@ RC PagedFileManager::createFile(const std::string &fileName) {
 
         unsigned cache = 0;
         // Allocate space for readPageCounter
-        memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
+        std::memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
         // Allocate space for writePageCounter
-        memcpy(hiddenPage + 1 * sizeof(unsigned), &cache, sizeof(unsigned));
+        std::memcpy(hiddenPage + 1 * sizeof(unsigned), &cache, sizeof(unsigned));
         // Allocate space for appendPageCounter
-        memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
+        std::memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
 
         fwrite(hiddenPage, sizeof(char), PAGE_SIZE, file);
         fclose(file);
@@ -148,9 +148,9 @@ RC FileHandle::setFile(const std::string &fileName) {
     if (fpt) {
         void *cache = malloc(PAGE_SIZE * sizeof(char));
         this->readHiddenPage(cache);
-        memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
-        memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
-        memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
+        std::memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
+        std::memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
+        std::memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
         return 0;
     }
     return -3;
