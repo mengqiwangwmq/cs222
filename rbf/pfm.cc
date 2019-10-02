@@ -1,4 +1,7 @@
 #include "pfm.h"
+#include <cstring>
+
+using namespace std;
 
 PagedFileManager *PagedFileManager::_pf_manager = nullptr;
 
@@ -75,7 +78,7 @@ FileHandle::FileHandle() {
 }
 
 FileHandle::~FileHandle() {
-    fclose(fpt);
+    // fclose(fpt);
 }
 
 RC FileHandle::readPage(PageNum pageNum, void *data) {

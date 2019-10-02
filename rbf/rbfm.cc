@@ -1,4 +1,7 @@
 #include "rbfm.h"
+#include <cstring>
+
+using namespace std;
 
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = nullptr;
 
