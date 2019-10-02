@@ -1,7 +1,4 @@
 #include "rbfm.h"
-#include <cstring>
-
-using namespace std;
 
 RecordBasedFileManager *RecordBasedFileManager::_rbf_manager = nullptr;
 
@@ -36,7 +33,8 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                         const void *data, RID &rid) {
-    // return -1;
+    int fieldCount = recordDescriptor.size();
+    void *lastPage = std::malloc(PAGE_SIZE);
 
 }
 
