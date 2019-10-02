@@ -58,7 +58,7 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
     for(int i = 0; i < recordDescriptor.size(); i ++) {
         // Check if field is null
         Attribute attr = recordDescriptor[i];
-        bool nullBit = nullFieledsIndicator[i/ sizeof(char)] & (1 << (7 - i % sizeof(char)));
+        bool nullBit = nullFieledsIndicator[i/ CHAR_BIT] & (1 << (7 - i % CHAR_BIT));
         if(!nullBit) {
             if(attr.type == TypeInt) {
                 int value;
@@ -66,19 +66,21 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
                 offset += attr.length;
                 std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
             }
-            if(attr.type == TypeReal) {
+            else if(attr.type == TypeReal) {
                 float value;
                 memcpy(&value, (char *)data + offset, attr.length);
                 offset += attr.length;
                 std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
             }
-            if(attr.type == TypeVarChar) {
+            else if(attr.type == TypeVarChar) {
                 int length;
-                char * value;
                 memcpy(&length, (char *)data + offset, sizeof(int));
                 offset += sizeof(int);
-                memcpy(&value, (char *)data + offset, length);
-                std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
+                char * value = (char *)malloc(length);
+                std::cout<<"the length of name: "<<length<<std::endl;
+                memcpy(value, (char *)data + offset, length);
+                offset += length;
+                std::cout<<attr.name.c_str()<<": "<<std::string(value, length)<<std::endl;
             } else {
                 std::cout<<attr.name<<": "<<"Null"<<std::endl;
             }
