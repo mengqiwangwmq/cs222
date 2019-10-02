@@ -8,6 +8,7 @@ typedef unsigned char byte;
 #define PAGE_SIZE 4096
 
 #include <string>
+#include <cstring>
 #include <climits>
 #include <fstream>
 

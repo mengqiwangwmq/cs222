@@ -35,7 +35,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
                                         const void *data, RID &rid) {
     int fieldCount = recordDescriptor.size();
     void *lastPage = std::malloc(PAGE_SIZE);
-
+    fileHandle.readPage(fileHandle.getNumberOfPages(), lastPage);
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
