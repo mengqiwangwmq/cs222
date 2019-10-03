@@ -167,43 +167,47 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const std::vecto
     return -1;
 }
 
+// Referenced from test_util prepareRecord function
 RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescriptor, const void *data) {
-    // Get nullFieldIndicator
-    int nullFieldByteLength = ceil((double) recordDescriptor.size() / CHAR_BIT);
-    unsigned char * nullFieledsIndicator = (unsigned char *)malloc(nullFieldByteLength);
-    memcpy(nullFieledsIndicator, (char *)data, nullFieldByteLength);
-    int offset = nullFieldByteLength;
-    std::cout<<"print records"<<std::endl;
-    for(int i = 0; i < recordDescriptor.size(); i ++) {
-        // Check if field is null
+    int fieldCount = recordDescriptor.size();
+    int nullFlagSize = this->getNullFlagSize(fieldCount);
+    int offset = 0;
+    auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
+    std::memset(nullFlags, 0, nullFlagSize);
+    std::memcpy((char *) data + offset, nullFlags, nullFlagSize);
+    offset += nullFlagSize;
+    for (int i = 0; i < fieldCount; i++) {
+        // Add handler for null flags larger than 1 byte
+        int bytePos = i / 8;
+        int bitPos = i % 8;
+        bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned)(7 - bitPos);
         Attribute attr = recordDescriptor[i];
-        bool nullBit = nullFieledsIndicator[i/ CHAR_BIT] & (1 << (7 - i % CHAR_BIT));
-        if(!nullBit) {
-            if(attr.type == TypeInt) {
-                int value;
-                memcpy(&value, (char *)data + offset, attr.length);
-                offset += attr.length;
-                std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
-            }
-            else if(attr.type == TypeReal) {
-                float value;
-                memcpy(&value, (char *)data + offset, attr.length);
-                offset += attr.length;
-                std::cout<<attr.name.c_str()<<": "<<value<<std::endl;
-            }
-            else if(attr.type == TypeVarChar) {
-                int length;
-                memcpy(&length, (char *)data + offset, sizeof(int));
+        std::cout << attr.name << ": " ;
+        if (!nullBit) {
+            if (attr.type == TypeVarChar) {
+                int nameLength;
+                std::memcpy(&nameLength, (char *) data + offset, sizeof(int));
                 offset += sizeof(int);
-                char * value = (char *)malloc(length);
-                std::cout<<"the length of name: "<<length<<std::endl;
-                memcpy(value, (char *)data + offset, length);
-                offset += length;
-                std::cout<<attr.name.c_str()<<": "<<std::string(value, length)<<std::endl;
-            } else {
-                std::cout<<attr.name<<": "<<"Null"<<std::endl;
+                char * value = (char *)malloc(nameLength);
+                memcpy(value, (char *)data + offset, nameLength);
+                offset += nameLength;
+                std::cout << std::string(value, nameLength) << std::endl;
+                std::cout << "Var Char Length: " << nameLength;
+            } else if (attr.type == TypeInt) {
+                int value;
+                memcpy(&value, (char *) data + offset, attr.length);
+                offset += attr.length;
+                std::cout << value;
+            } else if (attr.type == TypeReal) {
+                float value;
+                memcpy(&value, (char *) data + offset, attr.length);
+                offset += attr.length;
+                std::cout << value;
             }
+        } else {
+            std::cout << ": Null";
         }
+        std::cout << std::endl;
     }
     return 0;
 }

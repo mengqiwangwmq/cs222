@@ -6,7 +6,6 @@
 #include <climits>
 #include <iostream>
 #include <cmath>
-#include <cstring>
 
 #include "pfm.h"
 
