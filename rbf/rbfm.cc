@@ -31,11 +31,112 @@ RC RecordBasedFileManager::closeFile(FileHandle &fileHandle) {
     return _pf_manager->closeFile(fileHandle);
 }
 
+// Referenced from test_util getActualByteForNullsIndicator function
+int RecordBasedFileManager::getNullFlagSize(int fieldCount) {
+    return ceil((double) fieldCount / CHAR_BIT);
+}
+
+unsigned RecordBasedFileManager::readPageSpace(void *data) {
+    unsigned pageSpace;
+    std::memcpy(&pageSpace, (char *) data + 0, sizeof(unsigned));
+    return pageSpace;
+}
+
+unsigned RecordBasedFileManager::readPageRecTotal(void *data) {
+    unsigned pageRecLoad;
+    std::memcpy(&pageRecLoad, (char *) data + 1 * sizeof(unsigned), sizeof(unsigned));
+    return pageRecLoad;
+}
+
+void RecordBasedFileManager::setPageSpace(void *data, unsigned space) {
+    unsigned temp = space;
+    std::memcpy((char *) data + 0, &temp, sizeof(unsigned));
+}
+
+void RecordBasedFileManager::setPageRecTotal(void *data, unsigned recTotal) {
+    unsigned temp = recTotal;
+    std::memcpy((char *) data + 0, &temp, sizeof(unsigned));
+}
+
+// Referenced from test_util prepareRecord function
+int RecordBasedFileManager::getRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data) {
+    int fieldCount = recordDescriptor.size();
+    int nullFlagSize = this->getNullFlagSize(fieldCount);
+    int offset = 0;
+    auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
+    std::memset(nullFlags, 0, nullFlagSize);
+    std::memcpy((char *) data + offset, nullFlags, nullFlagSize);
+    offset += nullFlagSize;
+    for (int i = 0; i < fieldCount; i++) {
+        // Add handler for null flags larger than 1 byte
+        int bytePos = i / 8;
+        int bitPos = i % 8;
+        bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned)(7 - bitPos);
+        if (!nullBit) {
+            if (recordDescriptor[i].type == TypeVarChar) {
+                int nameLength;
+                std::memcpy(&nameLength, (char *) data + offset, sizeof(int));
+                offset += sizeof(int);
+                offset += nameLength;
+            } else {
+                offset += sizeof(int);
+            }
+        }
+    }
+    return offset;
+}
+
+unsigned RecordBasedFileManager::getInsertOffset(void *data) {
+    unsigned recTotal = this->readPageRecTotal(data);
+    if (recTotal == 0) {
+        return 2 * sizeof(unsigned);
+    }
+    int endOffset;
+    std::memcpy(&endOffset, (char *) data + PAGE_SIZE - 1 - recTotal * sizeof(unsigned), sizeof(unsigned));
+    int offset;
+    std::memcpy(&offset, (char *) data + endOffset, sizeof(unsigned));
+    return offset;
+}
+
+void RecordBasedFileManager::setInsertOffset(void *data, unsigned offset, unsigned recordSize) {
+    unsigned pos = offset + recordSize;
+    std::memcpy((char *) data + offset, &pos, sizeof(unsigned));
+}
+
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                         const void *data, RID &rid) {
     int fieldCount = recordDescriptor.size();
-    void *lastPage = std::malloc(PAGE_SIZE);
-    fileHandle.readPage(fileHandle.getNumberOfPages(), lastPage);
+    void *page = std::malloc(PAGE_SIZE);
+    unsigned numberOfPages = fileHandle.getNumberOfPages();
+    unsigned currentPID = numberOfPages - 1;
+    int recordSize = this->getRecordSize(recordDescriptor, data);
+    fileHandle.readPage(currentPID, page);
+    int i = -1;
+    if (this->readPageSpace(page) < recordSize + sizeof(unsigned)) {
+        for (i = 0; i < numberOfPages - 1; i++) {
+            fileHandle.readPage(i, page);
+            if (this->readPageSpace(page) >= recordSize + sizeof(unsigned)) {
+                break;
+            }
+        }
+    }
+    if (i == numberOfPages - 1) {
+        std::free(page);
+        page = std::malloc(PAGE_SIZE);
+        this->setPageSpace(page, PAGE_SIZE - 2 * sizeof(unsigned));
+        this->setPageRecTotal(page, 0);
+        fileHandle.appendPage(page);
+        numberOfPages = fileHandle.getNumberOfPages();
+        currentPID = numberOfPages - 1;
+        fileHandle.readPage(currentPID, page);
+    }
+    rid.pageNum = currentPID;
+    unsigned recTotal = this->readPageRecTotal(page);
+    rid.slotNum = recTotal;
+    unsigned offset = this->getInsertOffset(page);
+    std::memcpy((char *) page + offset, data, recordSize);
+    this->setInsertOffset(page, offset, recordSize);
+    return 0;
 }
 
 RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,

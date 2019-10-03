@@ -6,6 +6,7 @@
 #include <climits>
 #include <iostream>
 #include <cmath>
+#include <cstring>
 
 #include "pfm.h"
 
@@ -96,6 +97,22 @@ public:
     //  !!! The same format is used for updateRecord(), the returned data of readRecord(), and readAttribute().
     // For example, refer to the Q8 of Project 1 wiki page.
 
+    int getNullFlagSize(int fieldCount);
+
+    unsigned readPageSpace(void *data);
+
+    unsigned readPageRecTotal(void *data);
+
+    static void setPageSpace(void *data, unsigned space);
+
+    static void setPageRecTotal(void *data, unsigned recTotal);
+
+    unsigned getInsertOffset(void *data);
+    
+    static void setInsertOffset(void *data, unsigned offset, unsigned recordSize);
+
+    int getRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data);
+
     // Insert a record into a file
     RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
 
@@ -133,8 +150,6 @@ public:
             const void *value,                    // used in the comparison
             const std::vector<std::string> &attributeNames, // a list of projected attributes
             RBFM_ScanIterator &rbfm_ScanIterator);
-
-public:
 
 protected:
     RecordBasedFileManager();                                                   // Prevent construction

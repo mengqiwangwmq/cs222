@@ -74,9 +74,7 @@ FileHandle::FileHandle() {
     fpt = nullptr;
 }
 
-FileHandle::~FileHandle() {
-    // fclose(fpt);
-}
+FileHandle::~FileHandle() {}
 
 RC FileHandle::readPage(PageNum pageNum, void *data) {
     // Check if page requested exists or not
@@ -86,8 +84,7 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
 
     // Skip hiddenPage
     std::fseek(fpt, (pageNum + 1) * PAGE_SIZE, SEEK_SET);
-    char *ptr = static_cast<char *>(data);
-    std::fread(ptr, sizeof(char), PAGE_SIZE, fpt);
+    std::fread((char *) data, sizeof(char), PAGE_SIZE, fpt);
 
     // Update counters
     this->readPageCounter++;
@@ -130,9 +127,7 @@ RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePage
 RC FileHandle::updateCounterValues() {
     std::fseek(fpt, 0, SEEK_SET);
     std::fwrite(&this->readPageCounter, sizeof(unsigned), 1, fpt);
-    std::fseek(fpt, sizeof(unsigned), SEEK_SET);
     std::fwrite(&this->writePageCounter, sizeof(unsigned), 1, fpt);
-    std::fseek(fpt, 2 * sizeof(unsigned), SEEK_SET);
     std::fwrite(&this->appendPageCounter, sizeof(unsigned), 1, fpt);
     return 0;
 }
@@ -143,20 +138,17 @@ RC FileHandle::setFile(const std::string &fileName) {
     }
     fpt = std::fopen(fileName.c_str(), "r+");
     if (fpt) {
-        void *cache = std::malloc(PAGE_SIZE * sizeof(char));
-        this->readHiddenPage(cache);
-        std::memcpy(&this->readPageCounter, (char *) cache + 0, sizeof(unsigned));
-        std::memcpy(&this->writePageCounter, (char *) cache + sizeof(unsigned), sizeof(unsigned));
-        std::memcpy(&this->appendPageCounter, (char *) cache + 2 * sizeof(unsigned), sizeof(unsigned));
+        this->readHiddenPage();
         return 0;
     }
     return -3;
 }
 
-RC FileHandle::readHiddenPage(void *data) {
+RC FileHandle::readHiddenPage() {
     std::fseek(fpt, 0, SEEK_SET);
-    char *ptr = static_cast<char *>(data);
-    std::fread(ptr, sizeof(char), PAGE_SIZE, fpt);
+    std::fread(&this->readPageCounter, sizeof(char), sizeof(unsigned), fpt);
+    std::fread(&this->writePageCounter, sizeof(char), sizeof(unsigned), fpt);
+    std::fread(&this->appendPageCounter, sizeof(char), sizeof(unsigned), fpt);
     return 0;
 }
 
