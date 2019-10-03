@@ -65,8 +65,7 @@ int RecordBasedFileManager::getRecordSize(const std::vector<Attribute> &recordDe
     int nullFlagSize = this->getNullFlagSize(fieldCount);
     int offset = 0;
     auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
-    std::memset(nullFlags, 0, nullFlagSize);
-    std::memcpy((char *) data + offset, nullFlags, nullFlagSize);
+    std::memcpy(nullFlags, (char *) data + offset, nullFlagSize);
     offset += nullFlagSize;
     for (int i = 0; i < fieldCount; i++) {
         // Add handler for null flags larger than 1 byte
@@ -172,15 +171,15 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
     int fieldCount = recordDescriptor.size();
     int nullFlagSize = this->getNullFlagSize(fieldCount);
     int offset = 0;
+    bool nullBit;
     auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
-    std::memset(nullFlags, 0, nullFlagSize);
-    std::memcpy((char *) data + offset, nullFlags, nullFlagSize);
+    std::memcpy(nullFlags, (char *) data + offset, nullFlagSize);
     offset += nullFlagSize;
     for (int i = 0; i < fieldCount; i++) {
         // Add handler for null flags larger than 1 byte
         int bytePos = i / 8;
         int bitPos = i % 8;
-        bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned)(7 - bitPos);
+        nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned)(7 - bitPos);
         Attribute attr = recordDescriptor[i];
         std::cout << attr.name << ": " ;
         if (!nullBit) {
