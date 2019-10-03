@@ -99,17 +99,17 @@ public:
 
     int getNullFlagSize(int fieldCount);
 
-    unsigned readPageSpace(void *data);
+    unsigned getPageSpace(void *data);
 
-    unsigned readPageRecTotal(void *data);
+    unsigned getPageRecTotal(void *data);
 
     static void setPageSpace(void *data, unsigned space);
 
     static void setPageRecTotal(void *data, unsigned recTotal);
 
-    unsigned getInsertOffset(void *data);
+    unsigned getRecordOffset(void *data, unsigned slotNum);
     
-    static void setInsertOffset(void *data, unsigned offset, unsigned recordSize);
+    static void setRecordOffset(void *data, unsigned offset, unsigned recordSize, unsigned slotNum);
 
     int getRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data);
 
