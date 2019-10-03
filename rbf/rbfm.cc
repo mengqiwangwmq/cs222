@@ -36,31 +36,54 @@ int RecordBasedFileManager::getNullFlagSize(int fieldCount) {
     return ceil((double) fieldCount / CHAR_BIT);
 }
 
-unsigned RecordBasedFileManager::getPageSpace(void *data) {
-    unsigned pageSpace;
-    std::memcpy(&pageSpace, (char *) data + 0, sizeof(unsigned));
-    return pageSpace;
-}
-
-unsigned RecordBasedFileManager::getPageRecTotal(void *data) {
-    unsigned pageRecLoad;
-    std::memcpy(&pageRecLoad, (char *) data + 1 * sizeof(unsigned), sizeof(unsigned));
+short RecordBasedFileManager::getPageRecTotal(void *data) {
+    short pageRecLoad;
+    std::memcpy(&pageRecLoad, (char *) data + PAGE_SIZE - sizeof(short), sizeof(short));
     return pageRecLoad;
 }
 
-void RecordBasedFileManager::setPageSpace(void *data, unsigned space) {
-    unsigned temp = space;
-    std::memcpy((char *) data + 0, &temp, sizeof(unsigned));
-    std::memcpy(&temp, (char *) data + 0, sizeof(unsigned));
+void RecordBasedFileManager::setPageRecTotal(void *data, short recTotal) {
+    short temp = recTotal;
+    std::memcpy((char *) data + PAGE_SIZE - sizeof(short), &temp, sizeof(short));
 }
 
-void RecordBasedFileManager::setPageRecTotal(void *data, unsigned recTotal) {
-    unsigned temp = recTotal;
-    std::memcpy((char *) data + sizeof(unsigned), &temp, sizeof(unsigned));
+short RecordBasedFileManager::getPageSpace(void *data) {
+    short pageSpace;
+    std::memcpy(&pageSpace, (char *) data + PAGE_SIZE - 2 * sizeof(short), sizeof(short));
+    return pageSpace;
+}
+
+void RecordBasedFileManager::setPageSpace(void *data, short space) {
+    short temp = space;
+    std::memcpy((char *) data + PAGE_SIZE - 2 * sizeof(short), &temp, sizeof(short));
+}
+
+short RecordBasedFileManager::getRecordOffset(void *data, unsigned slotNum) {
+    if (slotNum == -1) {
+        return 0;
+    }
+    short offset;
+    int ptr = PAGE_SIZE - 2 * sizeof(short);
+    ptr = ptr - (slotNum + 1) * 2 * sizeof(short);
+    std::memcpy(&offset, (char *) data + ptr, sizeof(short));
+    return offset;
+}
+
+void RecordBasedFileManager::setRecordOffset(void *data, short offset, short recordSize, unsigned slotNum) {
+    short pos = offset + recordSize;
+    int ptr = PAGE_SIZE - 2 * sizeof(short);
+    ptr = ptr - (slotNum + 1) * 2 * sizeof(short);
+    std::memcpy((char *) data + ptr, &pos, sizeof(short));
+}
+
+short RecordBasedFileManager::getRecordSize(void *data, unsigned slotNum) {
+    short offset = this->getRecordOffset(data, slotNum);
+    short prevOffset = this->getRecordOffset(data, slotNum - 1);
+    return offset - prevOffset;
 }
 
 // Referenced from test_util prepareRecord function
-int RecordBasedFileManager::getRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data) {
+int RecordBasedFileManager::countRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data) {
     int fieldCount = recordDescriptor.size();
     int nullFlagSize = this->getNullFlagSize(fieldCount);
     int offset = 0;
@@ -71,7 +94,7 @@ int RecordBasedFileManager::getRecordSize(const std::vector<Attribute> &recordDe
         // Add handler for null flags larger than 1 byte
         int bytePos = i / 8;
         int bitPos = i % 8;
-        bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned)(7 - bitPos);
+        bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         if (!nullBit) {
             if (recordDescriptor[i].type == TypeVarChar) {
                 int nameLength;
@@ -86,23 +109,9 @@ int RecordBasedFileManager::getRecordSize(const std::vector<Attribute> &recordDe
     return offset;
 }
 
-unsigned RecordBasedFileManager::getRecordOffset(void *data, unsigned slotNum) {
-    if (this->getPageRecTotal(data) == 0) {
-        return 2 * sizeof(unsigned);
-    }
-    unsigned offset;
-    std::memcpy(&offset, (char *) data + PAGE_SIZE - (slotNum + 1) * sizeof(unsigned), sizeof(unsigned));
-    return offset;
-}
-
-void RecordBasedFileManager::setRecordOffset(void *data, unsigned offset, unsigned recordSize, unsigned slotNum) {
-    unsigned pos = offset + recordSize;
-    std::memcpy((char *) data + PAGE_SIZE - (slotNum + 1) * sizeof(unsigned), &pos, sizeof(unsigned));
-}
-
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                         const void *data, RID &rid) {
-    int recordSize = this->getRecordSize(recordDescriptor, data);
+    int recordSize = this->countRecordSize(recordDescriptor, data);
     void *page = std::malloc(PAGE_SIZE);
     unsigned numberOfPages = fileHandle.getNumberOfPages();
     int i = -1;
@@ -110,10 +119,10 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     if (numberOfPages != 0) {
         currentPID = numberOfPages - 1;
         fileHandle.readPage(currentPID, page);
-        if (this->getPageSpace(page) < recordSize + sizeof(unsigned)) {
+        if (this->getPageSpace(page) < recordSize + 2 * sizeof(short)) {
             for (i = 0; i < numberOfPages - 1; i++) {
                 fileHandle.readPage(i, page);
-                if (this->getPageSpace(page) >= recordSize + sizeof(unsigned)) {
+                if (this->getPageSpace(page) >= recordSize + 2 * sizeof(short)) {
                     break;
                 }
             }
@@ -129,16 +138,17 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
         currentPID = numberOfPages - 1;
         fileHandle.readPage(currentPID, page);
     }
-    rid.pageNum = currentPID;
-    unsigned recTotal = this->getPageRecTotal(page);
-    unsigned space = this->getPageSpace(page);
-    rid.slotNum = recTotal;
-    unsigned offset = this->getRecordOffset(page, recTotal - 1);
-    std::memcpy((char *) page + offset, data, recordSize);
-    this->setPageSpace(page, space - recordSize - sizeof(unsigned));
-    this->setPageRecTotal(page, recTotal + 1);
-    this->setRecordOffset(page, offset, recordSize, recTotal);
+    short recTotal = this->getPageRecTotal(page);
+    short prevOffset = this->getRecordOffset(page, recTotal - 1);
+    short space = this->getPageSpace(page);
+    std::memcpy((char *) page + prevOffset, data, recordSize);
+    recTotal += 1;
+    this->setPageRecTotal(page, recTotal);
+    this->setPageSpace(page, space - recordSize - 2 * sizeof(short));
+    this->setRecordOffset(page, prevOffset, recordSize, recTotal - 1);
     fileHandle.writePage(currentPID, page);
+    rid.pageNum = currentPID;
+    rid.slotNum = recTotal - 1;
     return 0;
 }
 
@@ -150,13 +160,12 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const std::vector<
     }
     void *page = std::malloc(PAGE_SIZE);
     fileHandle.readPage(rid.pageNum, page);
-    unsigned recTotal = this->getPageRecTotal(page);
+    short recTotal = this->getPageRecTotal(page);
     if (rid.slotNum >= recTotal) {
         return -1;
     }
-    unsigned offset = this->getRecordOffset(page, rid.slotNum);
-    unsigned prevOffset = rid.slotNum == 0 ? 2 * sizeof(unsigned) : this->getRecordOffset(page, rid.slotNum - 1);
-    unsigned recordSize = offset - prevOffset;
+    short prevOffset = this->getRecordOffset(page, rid.slotNum - 1);
+    short recordSize = this->getRecordSize(page, rid.slotNum);
     std::memcpy((char *) data, (char *) page + prevOffset, recordSize);
     return 0;
 }
@@ -179,16 +188,16 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
         // Add handler for null flags larger than 1 byte
         int bytePos = i / 8;
         int bitPos = i % 8;
-        nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned)(7 - bitPos);
+        nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         Attribute attr = recordDescriptor[i];
-        std::cout << attr.name << ": " ;
+        std::cout << attr.name << ": ";
         if (!nullBit) {
             if (attr.type == TypeVarChar) {
                 int nameLength;
                 std::memcpy(&nameLength, (char *) data + offset, sizeof(int));
                 offset += sizeof(int);
-                char * value = (char *)malloc(nameLength);
-                memcpy(value, (char *)data + offset, nameLength);
+                char *value = (char *) malloc(nameLength);
+                memcpy(value, (char *) data + offset, nameLength);
                 offset += nameLength;
                 std::cout << std::string(value, nameLength) << std::endl;
                 std::cout << "Var Char Length: " << nameLength;

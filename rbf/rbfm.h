@@ -6,6 +6,7 @@
 #include <climits>
 #include <iostream>
 #include <cmath>
+#include <cstring>
 
 #include "pfm.h"
 
@@ -98,19 +99,21 @@ public:
 
     int getNullFlagSize(int fieldCount);
 
-    unsigned getPageSpace(void *data);
+    short getPageRecTotal(void *data);
 
-    unsigned getPageRecTotal(void *data);
+    static void setPageRecTotal(void *data, short recTotal);
 
-    static void setPageSpace(void *data, unsigned space);
+    short getPageSpace(void *data);
 
-    static void setPageRecTotal(void *data, unsigned recTotal);
+    static void setPageSpace(void *data, short space);
 
-    unsigned getRecordOffset(void *data, unsigned slotNum);
+    short getRecordOffset(void *data, unsigned slotNum);
     
-    static void setRecordOffset(void *data, unsigned offset, unsigned recordSize, unsigned slotNum);
+    static void setRecordOffset(void *data, short offset, short recordSize, unsigned slotNum);
 
-    int getRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data);
+    short getRecordSize(void *data, unsigned slotNum);
+
+    int countRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data);
 
     // Insert a record into a file
     RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
