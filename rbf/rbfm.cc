@@ -64,7 +64,7 @@ short RecordBasedFileManager::getRecordOffset(void *data, unsigned slotNum) {
     }
     short offset;
     int ptr = PAGE_SIZE - 2 * sizeof(short);
-    ptr = ptr - (slotNum + 1) * 2 * sizeof(short);
+    ptr = ptr - (slotNum + 1) * sizeof(short);
     std::memcpy(&offset, (char *) data + ptr, sizeof(short));
     return offset;
 }
@@ -72,7 +72,7 @@ short RecordBasedFileManager::getRecordOffset(void *data, unsigned slotNum) {
 void RecordBasedFileManager::setRecordOffset(void *data, short offset, short recordSize, unsigned slotNum) {
     short pos = offset + recordSize;
     int ptr = PAGE_SIZE - 2 * sizeof(short);
-    ptr = ptr - (slotNum + 1) * 2 * sizeof(short);
+    ptr = ptr - (slotNum + 1) * sizeof(short);
     std::memcpy((char *) data + ptr, &pos, sizeof(short));
 }
 
@@ -119,10 +119,10 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     if (numberOfPages != 0) {
         currentPID = numberOfPages - 1;
         fileHandle.readPage(currentPID, page);
-        if (this->getPageSpace(page) < recordSize + 2 * sizeof(short)) {
+        if (this->getPageSpace(page) < recordSize + sizeof(short)) {
             for (i = 0; i < numberOfPages - 1; i++) {
                 fileHandle.readPage(i, page);
-                if (this->getPageSpace(page) >= recordSize + 2 * sizeof(short)) {
+                if (this->getPageSpace(page) >= recordSize + sizeof(short)) {
                     break;
                 }
             }
@@ -131,7 +131,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     if (i == numberOfPages - 1 || i == -1) {
         std::free(page);
         page = std::malloc(PAGE_SIZE);
-        this->setPageSpace(page, PAGE_SIZE - 2 * sizeof(unsigned));
+        this->setPageSpace(page, PAGE_SIZE - 2 * sizeof(short));
         this->setPageRecTotal(page, 0);
         fileHandle.appendPage(page);
         numberOfPages = fileHandle.getNumberOfPages();
@@ -144,7 +144,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     std::memcpy((char *) page + prevOffset, data, recordSize);
     recTotal += 1;
     this->setPageRecTotal(page, recTotal);
-    this->setPageSpace(page, space - recordSize - 2 * sizeof(short));
+    this->setPageSpace(page, space - recordSize - sizeof(short));
     this->setRecordOffset(page, prevOffset, recordSize, recTotal - 1);
     fileHandle.writePage(currentPID, page);
     rid.pageNum = currentPID;
