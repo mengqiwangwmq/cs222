@@ -83,35 +83,84 @@ short RecordBasedFileManager::getRecordSize(void *data, unsigned slotNum) {
 }
 
 // Referenced from test_util prepareRecord function
-int RecordBasedFileManager::countRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data) {
+short RecordBasedFileManager::parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable) {
     int fieldCount = recordDescriptor.size();
     int nullFlagSize = this->getNullFlagSize(fieldCount);
-    int offset = 0;
-    auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
-    std::memcpy(nullFlags, (char *) data + offset, nullFlagSize);
-    offset += nullFlagSize;
+    int dataPtr = 0;
+    short attrOffset = 0;
+    char *nullFlags = (char *) std::malloc(nullFlagSize);
+    std::memcpy(nullFlags, (char *) data + dataPtr, nullFlagSize);
+    dataPtr += nullFlagSize;
+    attrOffset += (nullFlagSize + fieldCount * sizeof(short));
     for (int i = 0; i < fieldCount; i++) {
         // Add handler for null flags larger than 1 byte
         int bytePos = i / 8;
         int bitPos = i % 8;
         bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
+        Attribute attr = recordDescriptor[i];
         if (!nullBit) {
-            if (recordDescriptor[i].type == TypeVarChar) {
+            if (attr.type == TypeVarChar) {
                 int nameLength;
-                std::memcpy(&nameLength, (char *) data + offset, sizeof(int));
-                offset += sizeof(int);
-                offset += nameLength;
-            } else {
-                offset += sizeof(int);
+                std::memcpy(&nameLength, (char *) data + dataPtr, sizeof(int));
+                dataPtr += sizeof(int);
+                dataPtr += nameLength;
+                attrOffset += nameLength;
+            } else if (attr.type == TypeInt) {
+                dataPtr += sizeof(int);
+                attrOffset += sizeof(int);
+            } else if (attr.type == TypeReal) {
+                dataPtr += sizeof(float);
+                attrOffset += sizeof(float);
+            }
+        }
+        std::memcpy((char *) offsetTable + i * sizeof(short), &attrOffset, sizeof(short));
+    }
+    return dataPtr + sizeof(short) * fieldCount;
+}
+
+RC RecordBasedFileManager::copyRecord(const void *page, short prevOffset, const std::vector<Attribute> &recordDescriptor, 
+        const void *data, const void *offsetTable) {
+    int fieldCount = recordDescriptor.size();
+    int nullFlagSize = this->getNullFlagSize(fieldCount);
+    short dataPtr = 0;
+    short pagePtr = prevOffset;
+    short attrOffset = 0;
+    char *nullFlags = (char *) std::malloc(nullFlagSize);
+    std::memcpy(nullFlags, (char *) data + dataPtr, nullFlagSize);
+    std::memcpy((char *) page + pagePtr, (char *) data + dataPtr, nullFlagSize);
+    dataPtr += nullFlagSize;
+    pagePtr += nullFlagSize;
+    std::memcpy((char *) page + pagePtr, (char *) offsetTable, fieldCount * sizeof(short));
+    pagePtr += fieldCount * sizeof(short);
+    
+    for (int i = 0; i < fieldCount; i++) {
+        std::memcpy(&attrOffset, (char *) offsetTable + i * sizeof(short), sizeof(short));
+        short length = attrOffset - (pagePtr - prevOffset);
+        Attribute attr = recordDescriptor[i];
+        if (length > 0) {
+            if (attr.type == TypeVarChar) {
+                dataPtr += sizeof(int);
+                memcpy((char *) page + pagePtr, (char *) data + dataPtr, length);
+                dataPtr += length;
+                pagePtr += length;
+            } else if (attr.type == TypeInt) {
+                memcpy((char *) page + pagePtr, (char *) data + dataPtr, sizeof(int));
+                dataPtr += sizeof(int);
+                pagePtr += sizeof(int);
+            } else if (attr.type == TypeReal) {
+                memcpy((char *) page + pagePtr, (char *) data + dataPtr, sizeof(float));
+                dataPtr += sizeof(float);
+                pagePtr += sizeof(float);
             }
         }
     }
-    return offset;
+    return 0;
 }
 
 RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                         const void *data, RID &rid) {
-    int recordSize = this->countRecordSize(recordDescriptor, data);
+    char *offsetTable = (char *) std::malloc(recordDescriptor.size() * sizeof(short));
+    short recordSize = this->parseRecord(recordDescriptor, data, offsetTable);
     void *page = std::malloc(PAGE_SIZE);
     unsigned numberOfPages = fileHandle.getNumberOfPages();
     int i = -1;
@@ -119,6 +168,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     if (numberOfPages != 0) {
         currentPID = numberOfPages - 1;
         fileHandle.readPage(currentPID, page);
+        i = 0;
         if (this->getPageSpace(page) < recordSize + sizeof(short)) {
             for (i = 0; i < numberOfPages - 1; i++) {
                 fileHandle.readPage(i, page);
@@ -141,7 +191,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     short recTotal = this->getPageRecTotal(page);
     short prevOffset = this->getRecordOffset(page, recTotal - 1);
     short space = this->getPageSpace(page);
-    std::memcpy((char *) page + prevOffset, data, recordSize);
+    this->copyRecord(page, prevOffset, recordDescriptor, data, offsetTable);
     recTotal += 1;
     this->setPageRecTotal(page, recTotal);
     this->setPageSpace(page, space - recordSize - sizeof(short));
@@ -179,37 +229,36 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const std::vecto
 RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescriptor, const void *data) {
     int fieldCount = recordDescriptor.size();
     int nullFlagSize = this->getNullFlagSize(fieldCount);
-    int offset = 0;
+    int dataPtr = 0;
     bool nullBit;
-    auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
-    std::memcpy(nullFlags, (char *) data + offset, nullFlagSize);
-    offset += nullFlagSize;
+    char *nullFlags = (char *) std::malloc(nullFlagSize);
+    std::memcpy(nullFlags, (char *) data + dataPtr, nullFlagSize);
+    dataPtr += nullFlagSize;
+    char *offsetTable = (char *) std::malloc(fieldCount * sizeof(short));
+    std::memcpy(offsetTable, (char *) data + dataPtr, fieldCount * sizeof(short));
+    dataPtr += fieldCount * sizeof(short);
+    short attrOffset;
     for (int i = 0; i < fieldCount; i++) {
-        // Add handler for null flags larger than 1 byte
-        int bytePos = i / 8;
-        int bitPos = i % 8;
-        nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         Attribute attr = recordDescriptor[i];
         std::cout << attr.name << ": ";
-        if (!nullBit) {
+        std::memcpy(&attrOffset, (char *) offsetTable + i * sizeof(short), sizeof(short));
+        short length = attrOffset - dataPtr;
+        if (length > 0) {
             if (attr.type == TypeVarChar) {
-                int nameLength;
-                std::memcpy(&nameLength, (char *) data + offset, sizeof(int));
-                offset += sizeof(int);
-                char *value = (char *) malloc(nameLength);
-                memcpy(value, (char *) data + offset, nameLength);
-                offset += nameLength;
-                std::cout << std::string(value, nameLength) << std::endl;
-                std::cout << "Var Char Length: " << nameLength;
+                char *value = (char *) malloc(length);
+                memcpy(value, (char *) data + dataPtr, length);
+                dataPtr += length;
+                std::cout << std::string(value, length) << std::endl;
+                std::cout << "Var Char Length: " << length;
             } else if (attr.type == TypeInt) {
                 int value;
-                memcpy(&value, (char *) data + offset, attr.length);
-                offset += attr.length;
+                memcpy(&value, (char *) data + dataPtr, length);
+                dataPtr += length;
                 std::cout << value;
             } else if (attr.type == TypeReal) {
                 float value;
-                memcpy(&value, (char *) data + offset, attr.length);
-                offset += attr.length;
+                memcpy(&value, (char *) data + dataPtr, length);
+                dataPtr += length;
                 std::cout << value;
             }
         } else {

@@ -113,7 +113,9 @@ public:
 
     short getRecordSize(void *data, unsigned slotNum);
 
-    int countRecordSize(const std::vector<Attribute> &recordDescriptor, const void *data);
+    short parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
+
+    RC copyRecord(const void *page, short prevOffset, const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
 
     // Insert a record into a file
     RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
