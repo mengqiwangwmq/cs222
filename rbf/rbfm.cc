@@ -102,9 +102,8 @@ short RecordBasedFileManager::parseRecord(const std::vector<Attribute> &recordDe
             if (attr.type == TypeVarChar) {
                 int nameLength;
                 std::memcpy(&nameLength, (char *) data + dataPtr, sizeof(int));
-                dataPtr += sizeof(int);
-                dataPtr += nameLength;
-                attrOffset += nameLength;
+                dataPtr += sizeof(int) + nameLength;
+                attrOffset += sizeof(int) + nameLength;
             } else if (attr.type == TypeInt) {
                 dataPtr += sizeof(int);
                 attrOffset += sizeof(int);
@@ -139,7 +138,9 @@ RC RecordBasedFileManager::copyRecord(const void *page, short prevOffset, const 
         Attribute attr = recordDescriptor[i];
         if (length > 0) {
             if (attr.type == TypeVarChar) {
+                memcpy((char *) page + pagePtr, (char *) data + dataPtr, sizeof(int));
                 dataPtr += sizeof(int);
+                pagePtr += sizeof(int);
                 memcpy((char *) page + pagePtr, (char *) data + dataPtr, length);
                 dataPtr += length;
                 pagePtr += length;
@@ -163,22 +164,23 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     short recordSize = this->parseRecord(recordDescriptor, data, offsetTable);
     void *page = std::malloc(PAGE_SIZE);
     unsigned numberOfPages = fileHandle.getNumberOfPages();
-    int i = -1;
+    bool needNewPage = true;
     unsigned currentPID = 0;
     if (numberOfPages != 0) {
         currentPID = numberOfPages - 1;
         fileHandle.readPage(currentPID, page);
-        i = 0;
+        needNewPage = false;
         if (this->getPageSpace(page) < recordSize + sizeof(short)) {
-            for (i = 0; i < numberOfPages - 1; i++) {
+            for (int i = 0; i < numberOfPages - 1; i++) {
                 fileHandle.readPage(i, page);
                 if (this->getPageSpace(page) >= recordSize + sizeof(short)) {
                     break;
                 }
             }
+            needNewPage = true;
         }
     }
-    if (i == numberOfPages - 1 || i == -1) {
+    if (needNewPage) {
         std::free(page);
         page = std::malloc(PAGE_SIZE);
         this->setPageSpace(page, PAGE_SIZE - 2 * sizeof(short));
@@ -216,7 +218,11 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const std::vector<
     }
     short prevOffset = this->getRecordOffset(page, rid.slotNum - 1);
     short recordSize = this->getRecordSize(page, rid.slotNum);
-    std::memcpy((char *) data, (char *) page + prevOffset, recordSize);
+    int fieldCount = recordDescriptor.size();
+    int nullFlagSize = this->getNullFlagSize(fieldCount);
+    std::memcpy((char *) data, (char *) page + prevOffset, nullFlagSize);
+    short headerSize = nullFlagSize + fieldCount * sizeof(short);
+    std::memcpy((char *) data + nullFlagSize, (char *) page + prevOffset + headerSize, recordSize - headerSize);
     return 0;
 }
 
@@ -231,34 +237,35 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
     int nullFlagSize = this->getNullFlagSize(fieldCount);
     int dataPtr = 0;
     bool nullBit;
-    char *nullFlags = (char *) std::malloc(nullFlagSize);
+    auto *nullFlags = (unsigned char *) std::malloc(nullFlagSize);
     std::memcpy(nullFlags, (char *) data + dataPtr, nullFlagSize);
     dataPtr += nullFlagSize;
-    char *offsetTable = (char *) std::malloc(fieldCount * sizeof(short));
-    std::memcpy(offsetTable, (char *) data + dataPtr, fieldCount * sizeof(short));
-    dataPtr += fieldCount * sizeof(short);
-    short attrOffset;
     for (int i = 0; i < fieldCount; i++) {
+        // Add handler for null flags larger than 1 byte
+        int bytePos = i / 8;
+        int bitPos = i % 8;
+        nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         Attribute attr = recordDescriptor[i];
         std::cout << attr.name << ": ";
-        std::memcpy(&attrOffset, (char *) offsetTable + i * sizeof(short), sizeof(short));
-        short length = attrOffset - dataPtr;
-        if (length > 0) {
+        if (!nullBit) {
             if (attr.type == TypeVarChar) {
-                char *value = (char *) malloc(length);
-                memcpy(value, (char *) data + dataPtr, length);
-                dataPtr += length;
-                std::cout << std::string(value, length) << std::endl;
-                std::cout << "Var Char Length: " << length;
+                int nameLength;
+                std::memcpy(&nameLength, (char *) data + dataPtr, sizeof(int));
+                dataPtr += sizeof(int);
+                char *value = (char *) malloc(nameLength);
+                memcpy(value, (char *) data + dataPtr, nameLength);
+                dataPtr += nameLength;
+                std::cout << std::string(value, nameLength) << std::endl;
+                std::cout << "Var Char Length: " << nameLength;
             } else if (attr.type == TypeInt) {
                 int value;
-                memcpy(&value, (char *) data + dataPtr, length);
-                dataPtr += length;
+                memcpy(&value, (char *) data + dataPtr, attr.length);
+                dataPtr += attr.length;
                 std::cout << value;
             } else if (attr.type == TypeReal) {
                 float value;
-                memcpy(&value, (char *) data + dataPtr, length);
-                dataPtr += length;
+                memcpy(&value, (char *) data + dataPtr, attr.length);
+                dataPtr += attr.length;
                 std::cout << value;
             }
         } else {
