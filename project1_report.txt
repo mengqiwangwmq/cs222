@@ -1,23 +1,34 @@
 1. Basic information
-Student ID : 
-Student Name : 
-OS (bit) :
-gcc version :
+Student ID : szeng5(45167563), mengqw3(55967217)
+Student Name : Shi Zeng, Mengqi Wang
+OS (bit) : 64-bit
+gcc version : 5.4.0
 
 
 2. Internal Record Format
 - Show your record format design and describe how your design satisfies O(1) field access. If not, just mention that you haven't implemented this feature.
 - Describe how you store a VarChar field.
 
+NullValuesIndicator|FieldOffsets|Length|VarChar|Unsigned|Real
+
+FieldOffsets - offset1|offset2|…offsetN
+Offset - short, points to the end of field
+
+For VarChar, a unsigned indicating the length is set ahead of the field
 
 3. Page Format
 - Show your page format design
 
+Record1|Record2|…|RecordN|———Empty Space———|RecordOffsetN|…|RecordOffset2|RecordOffset1|NumberOfEmptyBytes|NumberOfRecord
+
+RecordOffset - short, points to the end of a record
+NumberOfEmptyBytes - short
+NumberOfRecord - short
 
 4. Implementation Detail
 - Other implementation details goes here.
 
+When inserting, fieldOffsets table is generated from input and stored between NullValuesIndicator and the actual field data in a page of a file. When reading a record, fieldOffsets table is eliminated and then printed. So the fieldOffsets table is invisible to user.
 
 5. Other (optional)
 - Freely use this section to tell us about things that are related to the project 1, but not related to the other sections (optional)
-
