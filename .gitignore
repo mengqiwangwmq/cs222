@@ -34,3 +34,9 @@ cmake-build-debug
 *.exe
 *.out
 *.app
+
+# Project files
+tbl_*
+Tables
+Columns
+*_file
