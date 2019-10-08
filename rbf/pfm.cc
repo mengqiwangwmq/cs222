@@ -74,7 +74,7 @@ FileHandle::FileHandle() {
     fpt = nullptr;
 }
 
-FileHandle::~FileHandle() {}
+FileHandle::~FileHandle() = default;
 
 RC FileHandle::readPage(PageNum pageNum, void *data) {
     // Check if page requested exists or not
