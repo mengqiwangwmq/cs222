@@ -114,6 +114,7 @@ short RecordBasedFileManager::parseRecord(const std::vector<Attribute> &recordDe
         }
         std::memcpy((char *) offsetTable + i * sizeof(short), &attrOffset, sizeof(short));
     }
+    std::free(nullFlags);
     return dataPtr + sizeof(short) * fieldCount;
 }
 
@@ -124,8 +125,6 @@ RC RecordBasedFileManager::copyRecord(const void *page, short prevOffset, const 
     short dataPtr = 0;
     short pagePtr = prevOffset;
     short attrOffset = 0;
-    char *nullFlags = (char *) std::malloc(nullFlagSize);
-    std::memcpy(nullFlags, (char *) data + dataPtr, nullFlagSize);
     std::memcpy((char *) page + pagePtr, (char *) data + dataPtr, nullFlagSize);
     dataPtr += nullFlagSize;
     pagePtr += nullFlagSize;
@@ -181,8 +180,6 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
         }
     }
     if (needNewPage) {
-        std::free(page);
-        page = std::malloc(PAGE_SIZE);
         this->setPageSpace(page, PAGE_SIZE - 2 * sizeof(short));
         this->setPageRecTotal(page, 0);
         fileHandle.appendPage(page);
@@ -199,6 +196,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const std::vecto
     this->setPageSpace(page, space - recordSize - sizeof(short));
     this->setRecordOffset(page, prevOffset, recordSize, recTotal - 1);
     fileHandle.writePage(currentPID, page);
+    std::free(page);
+    std::free(offsetTable);
     rid.pageNum = currentPID;
     rid.slotNum = recTotal - 1;
     return 0;
@@ -223,6 +222,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const std::vector<
     std::memcpy((char *) data, (char *) page + prevOffset, nullFlagSize);
     short headerSize = nullFlagSize + fieldCount * sizeof(short);
     std::memcpy((char *) data + nullFlagSize, (char *) page + prevOffset + headerSize, recordSize - headerSize);
+    std::free(page);
     return 0;
 }
 
@@ -273,6 +273,7 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
         }
         std::cout << std::endl;
     }
+    std::free(nullFlags);
     return 0;
 }
 
