@@ -111,11 +111,21 @@ public:
     
     static void setRecordOffset(const void *data, short offset, short recordSize, unsigned slotNum);
 
+    short getInsertPoint(const void *data);
+
+    short getSlotTableLength(const void *data);
+
+    short countRemainSpace(const void *data, short recordSize);
+
     short getRecordSize(const void *data, unsigned slotNum);
+
+    short setRecordSize(const void *data, short recordSize, unsigned slotNum);
+
+    unsigned findFreeSlot(const void *data);
 
     short parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
 
-    RC copyRecord(const void *page, short prevOffset, const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable, bool *ptrFlag);
+    RC copyRecord(const void *page, int fieldCount, const void *data, const void *offsetTable, short recordSize);
 
     // Insert a record into a file
     RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
@@ -123,7 +133,7 @@ public:
     // Read a record identified by the given rid.
     RC readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid, void *data);
 
-    RID* locateRecord(FileHandle &fileHandle, void *page, short *prevOffset, short *recordSize, const RID &rid);
+    RID* locateRecord(FileHandle &fileHandle, void *page, short *pagePtr, short *recordSize, const RID &rid);
     // Print the record that is passed to this utility method.
     // This method will be mainly used for debugging/testing.
     // The format is as follows:
