@@ -99,23 +99,23 @@ public:
 
     int getNullFlagSize(int fieldCount);
 
-    short getPageRecTotal(void *data);
+    short getPageRecTotal(const void *data);
 
-    static void setPageRecTotal(void *data, short recTotal);
+    static void setPageRecTotal(const void *data, short recTotal);
 
-    short getPageSpace(void *data);
+    short getPageSpace(const void *data);
 
-    static void setPageSpace(void *data, short space);
+    static void setPageSpace(const void *data, short space);
 
-    short getRecordOffset(void *data, unsigned slotNum);
+    short getRecordOffset(const void *data, unsigned slotNum);
     
-    static void setRecordOffset(void *data, short offset, short recordSize, unsigned slotNum);
+    static void setRecordOffset(const void *data, short offset, short recordSize, unsigned slotNum);
 
-    short getRecordSize(void *data, unsigned slotNum);
+    short getRecordSize(const void *data, unsigned slotNum);
 
     short parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
 
-    RC copyRecord(const void *page, short prevOffset, const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
+    RC copyRecord(const void *page, short prevOffset, const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable, bool *ptrFlag);
 
     // Insert a record into a file
     RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
@@ -123,6 +123,7 @@ public:
     // Read a record identified by the given rid.
     RC readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid, void *data);
 
+    RID* locateRecord(FileHandle &fileHandle, void *page, short *prevOffset, short *recordSize, const RID &rid);
     // Print the record that is passed to this utility method.
     // This method will be mainly used for debugging/testing.
     // The format is as follows:
