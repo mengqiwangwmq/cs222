@@ -91,7 +91,7 @@ short RecordBasedFileManager::parseRecord(const std::vector<Attribute> &recordDe
     char *nullFlags = (char *) std::malloc(nullFlagSize);
     std::memcpy(nullFlags, (char *) data + dataPtr, nullFlagSize);
     dataPtr += nullFlagSize;
-    attrOffset += (nullFlagSize + fieldCount * sizeof(short));
+    attrOffset += sizeof(bool) + nullFlagSize + fieldCount * sizeof(short);
     for (int i = 0; i < fieldCount; i++) {
         // Add handler for null flags larger than 1 byte
         int bytePos = i / 8;
@@ -115,7 +115,7 @@ short RecordBasedFileManager::parseRecord(const std::vector<Attribute> &recordDe
         std::memcpy((char *) offsetTable + i * sizeof(short), &attrOffset, sizeof(short));
     }
     std::free(nullFlags);
-    return dataPtr + sizeof(short) * fieldCount;
+    return dataPtr + sizeof(short) * fieldCount + sizeof(bool);
 }
 
 RC RecordBasedFileManager::copyRecord(const void *page, short prevOffset, const std::vector<Attribute> &recordDescriptor, 
@@ -124,36 +124,18 @@ RC RecordBasedFileManager::copyRecord(const void *page, short prevOffset, const 
     int nullFlagSize = this->getNullFlagSize(fieldCount);
     short dataPtr = 0;
     short pagePtr = prevOffset;
-    short attrOffset = 0;
+    bool ptrFlag = false;
+    std::memcpy((char *) page + pagePtr, &ptrFlag, sizeof(bool));
+    pagePtr += sizeof(bool);
     std::memcpy((char *) page + pagePtr, (char *) data + dataPtr, nullFlagSize);
     dataPtr += nullFlagSize;
     pagePtr += nullFlagSize;
     std::memcpy((char *) page + pagePtr, (char *) offsetTable, fieldCount * sizeof(short));
     pagePtr += fieldCount * sizeof(short);
-    
-    for (int i = 0; i < fieldCount; i++) {
-        std::memcpy(&attrOffset, (char *) offsetTable + i * sizeof(short), sizeof(short));
-        short length = attrOffset - (pagePtr - prevOffset);
-        Attribute attr = recordDescriptor[i];
-        if (length > 0) {
-            if (attr.type == TypeVarChar) {
-                memcpy((char *) page + pagePtr, (char *) data + dataPtr, sizeof(int));
-                dataPtr += sizeof(int);
-                pagePtr += sizeof(int);
-                memcpy((char *) page + pagePtr, (char *) data + dataPtr, length);
-                dataPtr += length;
-                pagePtr += length;
-            } else if (attr.type == TypeInt) {
-                memcpy((char *) page + pagePtr, (char *) data + dataPtr, sizeof(int));
-                dataPtr += sizeof(int);
-                pagePtr += sizeof(int);
-            } else if (attr.type == TypeReal) {
-                memcpy((char *) page + pagePtr, (char *) data + dataPtr, sizeof(float));
-                dataPtr += sizeof(float);
-                pagePtr += sizeof(float);
-            }
-        }
-    }
+    short recordSize;
+    std::memcpy(&recordSize, (char *) offsetTable + (fieldCount - 1) * sizeof(short), sizeof(short));
+    recordSize -= (pagePtr - prevOffset);
+    std::memcpy((char *) page + pagePtr, (char *) data + dataPtr, recordSize);
     return 0;
 }
 
@@ -219,8 +201,8 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const std::vector<
     short recordSize = this->getRecordSize(page, rid.slotNum);
     int fieldCount = recordDescriptor.size();
     int nullFlagSize = this->getNullFlagSize(fieldCount);
-    std::memcpy((char *) data, (char *) page + prevOffset, nullFlagSize);
-    short headerSize = nullFlagSize + fieldCount * sizeof(short);
+    std::memcpy((char *) data, (char *) page + prevOffset + sizeof(bool), nullFlagSize);
+    short headerSize = nullFlagSize + fieldCount * sizeof(short) + sizeof(bool);
     std::memcpy((char *) data + nullFlagSize, (char *) page + prevOffset + headerSize, recordSize - headerSize);
     std::free(page);
     return 0;
