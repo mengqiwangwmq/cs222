@@ -307,17 +307,16 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const std::vecto
     }
     void *page = std::malloc(PAGE_SIZE);
     fileHandle.readPage(rid.pageNum, page);
-    short recTotal = this->getPageRecTotal(page);
-    if (rid.slotNum >= recTotal) {
+    if (rid.slotNum >= this->getSlotTableLength(page)) {
         return -1;
     }
-    short prevOffset, recordSize;
-    RID *id = this->locateRecord(fileHandle, page, &prevOffset, &recordSize, rid);
+    short pagePtr, recordSize;
+    RID *id = this->locateRecord(fileHandle, page, &pagePtr, &recordSize, rid);
     if (id == nullptr) {
         return -5;
     }
     std::free(id);
-    return -1;
+    return 0;
 }
 
 // Referenced from test_util prepareRecord function
@@ -335,7 +334,7 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
         int bitPos = i % 8;
         nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         Attribute attr = recordDescriptor[i];
-        std::cout << attr.name << ": ";
+        std::cout << attr.name << " ";
         if (!nullBit) {
             if (attr.type == TypeVarChar) {
                 int nameLength;
@@ -344,24 +343,23 @@ RC RecordBasedFileManager::printRecord(const std::vector<Attribute> &recordDescr
                 char *value = (char *) malloc(nameLength);
                 memcpy(value, (char *) data + dataPtr, nameLength);
                 dataPtr += nameLength;
-                std::cout << std::string(value, nameLength) << std::endl;
-                std::cout << "Var Char Length: " << nameLength;
+                std::cout << std::string(value, nameLength) << " ";
             } else if (attr.type == TypeInt) {
                 int value;
                 memcpy(&value, (char *) data + dataPtr, attr.length);
                 dataPtr += attr.length;
-                std::cout << value;
+                std::cout << value << " ";
             } else if (attr.type == TypeReal) {
                 float value;
                 memcpy(&value, (char *) data + dataPtr, attr.length);
                 dataPtr += attr.length;
-                std::cout << value;
+                std::cout << value << " ";
             }
         } else {
-            std::cout << ": Null";
+            std::cout << "Null ";
         }
-        std::cout << std::endl;
     }
+    std::cout << std::endl;
     std::free(nullFlags);
     return 0;
 }
