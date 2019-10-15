@@ -12,6 +12,8 @@ typedef unsigned char byte;
 #include <climits>
 #include <fstream>
 
+using namespace std;
+
 class FileHandle;
 
 class PagedFileManager {

@@ -10,6 +10,8 @@
 
 #include "pfm.h"
 
+using namespace std;
+
 // Record ID
 typedef struct {
     unsigned pageNum;    // page number
@@ -97,31 +99,29 @@ public:
     //  !!! The same format is used for updateRecord(), the returned data of readRecord(), and readAttribute().
     // For example, refer to the Q8 of Project 1 wiki page.
 
-    int getNullFlagSize(int fieldCount);
+    static short getNullFlagSize(int fieldCount);
 
-    short getPageRecTotal(const void *data);
+    static short getPageSlotTotal(const void *page);
 
-    static void setPageRecTotal(const void *data, short recTotal);
+    static void setPageSlotTotal(const void *page, short slotTotal);
 
-    short getPageSpace(const void *data);
+    static short getPageFreeSpace(const void *page);
 
-    static void setPageSpace(const void *data, short space);
+    static void setPageFreeSpace(const void *page, short space);
 
-    short getRecordOffset(const void *data, unsigned slotNum);
+    static short getRecordOffset(const void *page, short slotNum);
     
-    static void setRecordOffset(const void *data, short offset, short recordSize, unsigned slotNum);
+    static void setRecordOffset(const void *page, short offset, short recordSize, short slotNum);
 
-    short getInsertPoint(const void *data);
+    static short getRecordSize(const void *page, unsigned slotNum);
 
-    short getSlotTableLength(const void *data);
+    static void setRecordSize(const void *page, short recordSize, unsigned slotNum);
 
-    short countRemainSpace(const void *data, short recordSize);
+    short getInsertOffset(const void *page);
 
-    short getRecordSize(const void *data, unsigned slotNum);
+    short countRemainSpace(const void *page, short recordSize);
 
-    short setRecordSize(const void *data, short recordSize, unsigned slotNum);
-
-    unsigned findFreeSlot(const void *data);
+    short findFreeSlot(const void *page);
 
     short parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
 

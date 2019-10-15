@@ -15,48 +15,48 @@ PagedFileManager::PagedFileManager(const PagedFileManager &) = default;
 
 PagedFileManager &PagedFileManager::operator=(const PagedFileManager &) = default;
 
-bool fileExist(const std::string &fileName) {
-    FILE *file = std::fopen(fileName.c_str(), "r");
+bool fileExist(const string &fileName) {
+    FILE *file = fopen(fileName.c_str(), "r");
     if (file) {
-        std::fclose(file);
+        fclose(file);
         return true;
     } else {
         return false;
     }
 }
 
-RC PagedFileManager::createFile(const std::string &fileName) {
+RC PagedFileManager::createFile(const string &fileName) {
     if (fileExist(fileName)) {
         return -2; //FileDuplicateException
     }
-    FILE *file = std::fopen(fileName.c_str(), "w");
+    FILE *file = fopen(fileName.c_str(), "w");
     if (file) {
         char *hiddenPage = new char[PAGE_SIZE];
 
         unsigned cache = 0;
         // Allocate space for readPageCounter
-        std::memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
+        memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
         // Allocate space for writePageCounter
-        std::memcpy(hiddenPage + 1 * sizeof(unsigned), &cache, sizeof(unsigned));
+        memcpy(hiddenPage + 1 * sizeof(unsigned), &cache, sizeof(unsigned));
         // Allocate space for appendPageCounter
-        std::memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
+        memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
 
-        std::fwrite(hiddenPage, sizeof(char), PAGE_SIZE, file);
-        std::fclose(file);
+        fwrite(hiddenPage, sizeof(char), PAGE_SIZE, file);
+        fclose(file);
         return 0;
     }
     return -3; //FileOpException
 }
 
-RC PagedFileManager::destroyFile(const std::string &fileName) {
+RC PagedFileManager::destroyFile(const string &fileName) {
     if (!fileExist(fileName)) {
         return -1; //FileNotFoundException
     }
-    std::remove(fileName.c_str());
+    remove(fileName.c_str());
     return 0;
 }
 
-RC PagedFileManager::openFile(const std::string &fileName, FileHandle &fileHandle) {
+RC PagedFileManager::openFile(const string &fileName, FileHandle &fileHandle) {
     if (!fileExist(fileName)) {
         return -1; //FileNotFoundException
     }
@@ -83,8 +83,8 @@ RC FileHandle::readPage(PageNum pageNum, void *data) {
     }
 
     // Skip hiddenPage
-    std::fseek(fpt, (pageNum + 1) * PAGE_SIZE, SEEK_SET);
-    std::fread((char *) data, sizeof(char), PAGE_SIZE, fpt);
+    fseek(fpt, (pageNum + 1) * PAGE_SIZE, SEEK_SET);
+    fread((char *) data, sizeof(char), PAGE_SIZE, fpt);
 
     // Update counters
     this->readPageCounter++;
@@ -97,24 +97,24 @@ RC FileHandle::writePage(PageNum pageNum, const void *data) {
     if (pageNum >= this->getNumberOfPages()) {
         return -1;
     }
-    std::fseek(fpt, (pageNum + 1) * PAGE_SIZE, SEEK_SET);
-    std::fwrite(data, sizeof(char), PAGE_SIZE, fpt);
+    fseek(fpt, (pageNum + 1) * PAGE_SIZE, SEEK_SET);
+    fwrite(data, sizeof(char), PAGE_SIZE, fpt);
     this->writePageCounter++;
     this->updateCounterValues();
     return 0;
 }
 
 RC FileHandle::appendPage(const void *data) {
-    std::fseek(fpt, 0, SEEK_END);
-    std::fwrite(data, sizeof(char), PAGE_SIZE, fpt);
+    fseek(fpt, 0, SEEK_END);
+    fwrite(data, sizeof(char), PAGE_SIZE, fpt);
     this->appendPageCounter++;
     this->updateCounterValues();
     return 0;
 }
 
 unsigned FileHandle::getNumberOfPages() {
-    std::fseek(fpt, 0L, SEEK_END);
-    return std::ftell(fpt) / PAGE_SIZE - 1;
+    fseek(fpt, 0L, SEEK_END);
+    return ftell(fpt) / PAGE_SIZE - 1;
 }
 
 RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePageCount, unsigned &appendPageCount) {
@@ -125,18 +125,18 @@ RC FileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePage
 }
 
 RC FileHandle::updateCounterValues() {
-    std::fseek(fpt, 0, SEEK_SET);
-    std::fwrite(&this->readPageCounter, sizeof(unsigned), 1, fpt);
-    std::fwrite(&this->writePageCounter, sizeof(unsigned), 1, fpt);
-    std::fwrite(&this->appendPageCounter, sizeof(unsigned), 1, fpt);
+    fseek(fpt, 0, SEEK_SET);
+    fwrite(&this->readPageCounter, sizeof(unsigned), 1, fpt);
+    fwrite(&this->writePageCounter, sizeof(unsigned), 1, fpt);
+    fwrite(&this->appendPageCounter, sizeof(unsigned), 1, fpt);
     return 0;
 }
 
-RC FileHandle::setFile(const std::string &fileName) {
+RC FileHandle::setFile(const string &fileName) {
     if (fileHandleOccupied()) {
         return -4; //FileHandleOccupiedException
     }
-    fpt = std::fopen(fileName.c_str(), "r+");
+    fpt = fopen(fileName.c_str(), "r+");
     if (fpt) {
         this->readHiddenPage();
         return 0;
@@ -145,17 +145,17 @@ RC FileHandle::setFile(const std::string &fileName) {
 }
 
 RC FileHandle::readHiddenPage() {
-    std::fseek(fpt, 0, SEEK_SET);
-    std::fread(&this->readPageCounter, sizeof(char), sizeof(unsigned), fpt);
-    std::fread(&this->writePageCounter, sizeof(char), sizeof(unsigned), fpt);
-    std::fread(&this->appendPageCounter, sizeof(char), sizeof(unsigned), fpt);
+    fseek(fpt, 0, SEEK_SET);
+    fread(&this->readPageCounter, sizeof(char), sizeof(unsigned), fpt);
+    fread(&this->writePageCounter, sizeof(char), sizeof(unsigned), fpt);
+    fread(&this->appendPageCounter, sizeof(char), sizeof(unsigned), fpt);
     return 0;
 }
 
 RC FileHandle::closeFile() {
     if (fpt) {
         this->updateCounterValues();
-        std::fclose(fpt);
+        fclose(fpt);
         return 0;
     }
     return -3;  // FileOpException
