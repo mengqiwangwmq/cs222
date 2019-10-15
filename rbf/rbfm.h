@@ -111,7 +111,7 @@ public:
 
     static short getRecordOffset(const void *page, short slotNum);
     
-    static void setRecordOffset(const void *page, short offset, short recordSize, short slotNum);
+    static void setRecordOffset(const void *page, short offset, short slotNum);
 
     static short getRecordSize(const void *page, unsigned slotNum);
 
@@ -133,7 +133,7 @@ public:
     // Read a record identified by the given rid.
     RC readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid, void *data);
 
-    RID* locateRecord(FileHandle &fileHandle, void *page, short *pagePtr, short *recordSize, const RID &rid);
+    RID* locateRecord(FileHandle &fileHandle, void *page, short *recordOffset, short *recordSize, const RID &rid);
     // Print the record that is passed to this utility method.
     // This method will be mainly used for debugging/testing.
     // The format is as follows:
