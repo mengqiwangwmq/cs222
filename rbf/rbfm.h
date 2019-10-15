@@ -119,7 +119,7 @@ public:
 
     short getInsertOffset(const void *page);
 
-    short countRemainSpace(const void *page, short recordSize);
+    short countRemainSpace(const void *page, short freeSpace, short recordSize, bool newFlag);
 
     short findFreeSlot(const void *page);
 
@@ -133,7 +133,9 @@ public:
     // Read a record identified by the given rid.
     RC readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid, void *data);
 
-    RID* locateRecord(FileHandle &fileHandle, void *page, short *recordOffset, short *recordSize, const RID &rid);
+    void locateRecord(FileHandle &fileHandle, void *page, short *recordOffset, short *recordSize, RID *&id);
+
+    void shiftRecord(const void *page, short recordOffset, short distance);
     // Print the record that is passed to this utility method.
     // This method will be mainly used for debugging/testing.
     // The format is as follows:

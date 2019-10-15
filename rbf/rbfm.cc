@@ -76,11 +76,10 @@ short RecordBasedFileManager::getInsertOffset(const void *page) {
            2 * sizeof(short);
 }
 
-short RecordBasedFileManager::countRemainSpace(const void *page, short recordSize) {
-    short freeSpace = this->getPageFreeSpace(page);
+short RecordBasedFileManager::countRemainSpace(const void *page, short freeSpace, short recordSize, bool newFlag) {
     recordSize = recordSize >= sizeof(unsigned) + sizeof(short) ?
                  recordSize : sizeof(unsigned) + sizeof(short);
-    if (this->findFreeSlot(page) == this->getPageSlotTotal(page)) {
+    if (newFlag && this->findFreeSlot(page) == this->getPageSlotTotal(page)) {
         return freeSpace - recordSize - 2 * sizeof(short);
     }
     return freeSpace - recordSize;
@@ -179,10 +178,12 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         currentPID = numberOfPages - 1;
         fileHandle.readPage(currentPID, page);
         needNewPage = false;
-        if (this->countRemainSpace(page, recordSize) < 0) {
+        if (this->countRemainSpace(page, this->getPageFreeSpace(page),
+                                   recordSize, true) < 0) {
             for (int i = 0; i < numberOfPages - 1; i++) {
                 fileHandle.readPage(i, page);
-                if (this->countRemainSpace(page, recordSize) >= 0) {
+                if (this->countRemainSpace(page, this->getPageFreeSpace(page),
+                                           recordSize, true) >= 0) {
                     break;
                 }
             }
@@ -205,7 +206,8 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     if (rid.slotNum == slotTotal) {
         this->setPageSlotTotal(page, slotTotal + 1);
     }
-    this->setPageFreeSpace(page, this->countRemainSpace(page, recordSize));
+    this->setPageFreeSpace(page, this->countRemainSpace(page, this->getPageFreeSpace(page),
+                                                        recordSize, true));
     this->setRecordOffset(page, insertOffset + recordSize, rid.slotNum);
     this->setRecordSize(page, recordSize, rid.slotNum);
     fileHandle.writePage(currentPID, page);
@@ -225,8 +227,10 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     if (rid.slotNum >= this->getPageSlotTotal(page)) {
         return -1;
     }
+    RID *id = (RID *) malloc(sizeof(RID));
+    memcpy(id, &rid, sizeof(RID));
     short recordOffset, recordSize;
-    RID *id = this->locateRecord(fileHandle, page, &recordOffset, &recordSize, rid);
+    this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
     if (id == nullptr) {
         return -5;
     }
@@ -242,16 +246,15 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     return 0;
 }
 
-RID *RecordBasedFileManager::locateRecord(FileHandle &fileHandle, void *page,
-                                          short *recordOffset, short *recordSize, const RID &rid) {
-    *recordOffset = this->getRecordOffset(page, rid.slotNum);
+void RecordBasedFileManager::locateRecord(FileHandle &fileHandle, void *page,
+                                          short *recordOffset, short *recordSize, RID *&id) {
+    *recordOffset = this->getRecordOffset(page, id->slotNum);
     if (*recordOffset == -1) {
-        return nullptr;
+        id = nullptr;
+        return;
     }
-    *recordSize = this->getRecordSize(page, rid.slotNum);
+    *recordSize = this->getRecordSize(page, id->slotNum);
     short pagePtrSize = sizeof(unsigned) + sizeof(short);
-    RID *id = (RID *) malloc(sizeof(RID));
-    memcpy(id, &rid, sizeof(RID));
     unsigned pageNum;
     short slotNum;
     while (*recordSize == -1) {
@@ -263,11 +266,31 @@ RID *RecordBasedFileManager::locateRecord(FileHandle &fileHandle, void *page,
         fileHandle.readPage(id->pageNum, page);
         *recordOffset = this->getRecordOffset(page, id->slotNum);
         if (*recordOffset == -1) {
-            return nullptr;
+            id = nullptr;
+            return;
         }
         *recordSize = this->getRecordSize(page, id->slotNum);
     }
-    return id;
+}
+
+void RecordBasedFileManager::shiftRecord(const void *page, short recordOffset, short distance) {
+    short slotTotal = this->getPageSlotTotal(page);
+    short offset;
+    bool moveFlag = false;
+    for (short i = 0; i < slotTotal; i++) {
+        offset = this->getRecordOffset(page, i);
+        if (offset > recordOffset) {
+            moveFlag = true;
+            this->setRecordOffset(page, offset + distance, i);
+        }
+    }
+    short len = this->getInsertOffset(page) - recordOffset;
+    if (moveFlag && len != 0) {
+        char *cache = (char *) malloc(len);
+        memcpy(cache, (char *) page + recordOffset, len);
+        memcpy((char *) page + recordOffset + distance, cache, len);
+        free(cache);
+    }
 }
 
 RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor,
@@ -283,26 +306,13 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
         return -1;
     }
     short recordOffset, recordSize;
-    RID *id = this->locateRecord(fileHandle, page, &recordOffset, &recordSize, rid);
+    RID *id = (RID *) malloc(sizeof(RID));
+    memcpy(id, &rid, sizeof(RID));
+    this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
     if (id == nullptr) {
         return -5;
     }
-    short offset;
-    bool moveFlag = false;
-    for (short i = 0; i < slotTotal; i++) {
-        offset = this->getRecordOffset(page, i);
-        if (offset > recordOffset) {
-            moveFlag = true;
-            this->setRecordOffset(page, offset - recordSize, i);
-        }
-    }
-    if (moveFlag) {
-        short len = this->getInsertOffset(page) - recordOffset;
-        char *cache = (char *) malloc(len);
-        memcpy(cache,(char *) page + recordOffset, len);
-        memcpy((char *) page + recordOffset - recordSize, cache, len);
-        free(cache);
-    }
+    this->shiftRecord(page, recordOffset, -recordSize);
     this->setRecordOffset(page, -1, id->slotNum);
     fileHandle.writePage(id->pageNum, page);
     free(id);
@@ -357,7 +367,29 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
 
 RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor,
                                         const void *data, const RID &rid) {
-    return -1;
+    unsigned numberOfPages = fileHandle.getNumberOfPages();
+    if (rid.pageNum >= numberOfPages) {
+        return -1;
+    }
+    void *page = malloc(PAGE_SIZE);
+    fileHandle.readPage(rid.pageNum, page);
+    short slotTotal = this->getPageSlotTotal(page);
+    if (rid.slotNum >= slotTotal) {
+        return -1;
+    }
+    short recordOffset, recordSize;
+    RID *id = (RID *) malloc(sizeof(RID));
+    memcpy(id, &rid, sizeof(RID));
+    this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
+    if (id == nullptr) {
+        return -5;
+    }
+    this->shiftRecord(page, recordOffset, -recordSize);
+    this->setRecordOffset(page, -1, id->slotNum);
+    fileHandle.writePage(id->pageNum, page);
+    free(id);
+    free(page);
+    return 0;
 }
 
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor,
