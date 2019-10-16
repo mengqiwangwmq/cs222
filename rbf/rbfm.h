@@ -129,7 +129,7 @@ public:
 
     static void setRecordSize(const void *page, short recordSize, unsigned slotNum);
 
-    short getInsertOffset(const void *page);
+    short getInsertPtr(const void *page);
 
     short countRemainSpace(const void *page, short freeSpace, short recordSize, bool newFlag);
 
@@ -137,7 +137,7 @@ public:
 
     short parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
 
-    RC copyRecord(const void *page, int fieldCount, const void *data, const void *offsetTable, short recordSize);
+    RC copyRecord(const void *page, short insertPtr, int fieldCount, const void *data, const void *offsetTable, short recordSize);
 
     // Insert a record into a file
     RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
@@ -145,7 +145,7 @@ public:
     // Read a record identified by the given rid.
     RC readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid, void *data);
 
-    void locateRecord(FileHandle &fileHandle, void *page, short *recordOffset, short *recordSize, RID *&id);
+    void locateRecord(FileHandle &fileHandle, void *page, short *recordOffset, short *recordSize, RID* &id);
 
     void shiftRecord(const void *page, short recordOffset, short distance);
     // Print the record that is passed to this utility method.

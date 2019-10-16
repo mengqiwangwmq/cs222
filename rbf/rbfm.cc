@@ -70,7 +70,7 @@ void RecordBasedFileManager::setRecordOffset(const void *page, short offset, sho
     memcpy((char *) page + ptr, &offset, sizeof(short));
 }
 
-short RecordBasedFileManager::getInsertOffset(const void *page) {
+short RecordBasedFileManager::getInsertPtr(const void *page) {
     return PAGE_SIZE - this->getPageFreeSpace(page) -
            this->getPageSlotTotal(page) * 2 * sizeof(short) -
            2 * sizeof(short);
@@ -150,18 +150,17 @@ short RecordBasedFileManager::parseRecord(const vector<Attribute> &recordDescrip
     return attrOffset;
 }
 
-RC RecordBasedFileManager::copyRecord(const void *page, int fieldCount,
+RC RecordBasedFileManager::copyRecord(const void *page, short insertPtr, int fieldCount,
                                       const void *data, const void *offsetTable, short recordSize) {
     short nullFlagSize = this->getNullFlagSize(fieldCount);
     short dataPtr = 0;
-    short insertOffset = this->getInsertOffset(page);
-    short pagePtr = insertOffset;
+    short pagePtr = insertPtr;
     memcpy((char *) page + pagePtr, (char *) data + dataPtr, nullFlagSize);
     dataPtr += nullFlagSize;
     pagePtr += nullFlagSize;
     memcpy((char *) page + pagePtr, (char *) offsetTable, fieldCount * sizeof(short));
     pagePtr += fieldCount * sizeof(short);
-    short sz = recordSize - (pagePtr - insertOffset);
+    short sz = recordSize - (pagePtr - insertPtr);
     memcpy((char *) page + pagePtr, (char *) data + dataPtr, sz);
     return 0;
 }
@@ -201,14 +200,15 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     rid.pageNum = currentPID;
     rid.slotNum = this->findFreeSlot(page);
     short slotTotal = this->getPageSlotTotal(page);
-    short insertOffset = this->getInsertOffset(page);
-    this->copyRecord(page, recordDescriptor.size(), data, offsetTable, recordSize);
+    short insertPtr = this->getInsertPtr(page);
+    this->copyRecord(page, insertPtr, recordDescriptor.size(),
+                     data, offsetTable, recordSize);
     if (rid.slotNum == slotTotal) {
         this->setPageSlotTotal(page, slotTotal + 1);
     }
     this->setPageFreeSpace(page, this->countRemainSpace(page, this->getPageFreeSpace(page),
                                                         recordSize, true));
-    this->setRecordOffset(page, insertOffset + recordSize, rid.slotNum);
+    this->setRecordOffset(page, insertPtr + recordSize, rid.slotNum);
     this->setRecordSize(page, recordSize, rid.slotNum);
     fileHandle.writePage(currentPID, page);
     free(page);
@@ -247,7 +247,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
 }
 
 void RecordBasedFileManager::locateRecord(FileHandle &fileHandle, void *page,
-                                          short *recordOffset, short *recordSize, RID *&id) {
+                                          short *recordOffset, short *recordSize, RID* &id) {
     *recordOffset = this->getRecordOffset(page, id->slotNum);
     if (*recordOffset == -1) {
         id = nullptr;
@@ -284,7 +284,7 @@ void RecordBasedFileManager::shiftRecord(const void *page, short recordOffset, s
             this->setRecordOffset(page, offset + distance, i);
         }
     }
-    short len = this->getInsertOffset(page) - recordOffset;
+    short len = this->getInsertPtr(page) - recordOffset;
     if (moveFlag && len != 0) {
         char *cache = (char *) malloc(len);
         memcpy(cache, (char *) page + recordOffset, len);
@@ -384,10 +384,65 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     if (id == nullptr) {
         return -5;
     }
-    this->shiftRecord(page, recordOffset, -recordSize);
-    this->setRecordOffset(page, -1, id->slotNum);
+    int fieldCount = recordDescriptor.size();
+    char *offsetTable = (char *) malloc(fieldCount * sizeof(short));
+    short newSize = this->parseRecord(recordDescriptor, data, offsetTable);
+    if (this->countRemainSpace(page, this->getPageFreeSpace(page) + recordSize, newSize, false) >= 0) {
+        short distance = newSize - recordSize;
+        if (distance <= 0) {
+            this->copyRecord(page, recordOffset - recordSize, fieldCount,
+                             data, offsetTable, newSize);
+            this->shiftRecord(page, recordOffset, distance);
+        } else {
+            this->shiftRecord(page, recordOffset, distance);
+            this->copyRecord(page, recordOffset - recordSize, fieldCount,
+                             data, offsetTable, newSize);
+        }
+        this->setRecordOffset(page, recordOffset + distance, id->slotNum);
+        this->setRecordSize(page, newSize, id->slotNum);
+    } else {
+        char *cache = (char *) malloc(PAGE_SIZE);
+        unsigned pageNum = 0;
+        for (pageNum = 0; pageNum < numberOfPages; pageNum++) {
+            if (pageNum == id->pageNum) continue;
+            fileHandle.readPage(pageNum, cache);
+            if (this->countRemainSpace(cache, this->getPageFreeSpace(cache), newSize, true) >= 0) {
+                break;
+            }
+        }
+        if (pageNum == numberOfPages) {
+            this->setPageFreeSpace(cache, PAGE_SIZE - 2 * sizeof(short));
+            this->setPageSlotTotal(cache, 0);
+            fileHandle.appendPage(cache);
+            numberOfPages = fileHandle.getNumberOfPages();
+            pageNum = numberOfPages - 1;
+            fileHandle.readPage(pageNum, cache);
+        }
+        short slotNum = this->findFreeSlot(cache);
+        short slotTotal = this->getPageSlotTotal(cache);
+        short insertPtr = this->getInsertPtr(cache);
+        this->copyRecord(cache, insertPtr, fieldCount,
+                         data, offsetTable, newSize);
+        if (slotNum == slotTotal) {
+            this->setPageSlotTotal(cache, slotTotal + 1);
+        }
+        this->setPageFreeSpace(cache, this->countRemainSpace(cache, this->getPageFreeSpace(cache),
+                                                             newSize, true));
+        this->setRecordOffset(cache, insertPtr + newSize, slotNum);
+        this->setRecordSize(cache, newSize, slotNum);
+        fileHandle.writePage(pageNum, cache);
+        free(cache);
+        insertPtr = recordOffset - recordSize;
+        memcpy((char *) page + insertPtr, &pageNum, sizeof(unsigned));
+        memcpy((char *) page + insertPtr + sizeof(unsigned), &slotNum, sizeof(short));
+        short distance = sizeof(unsigned) + sizeof(short) - recordSize;
+        this->shiftRecord(page, recordOffset, distance);
+        this->setRecordOffset(page, recordOffset + distance, id->slotNum);
+        this->setRecordSize(page, -1, id->slotNum);
+    }
     fileHandle.writePage(id->pageNum, page);
     free(id);
+    free(offsetTable);
     free(page);
     return 0;
 }
