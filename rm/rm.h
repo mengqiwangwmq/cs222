@@ -64,6 +64,16 @@ public:
 
     RC dropAttribute(const std::string &tableName, const std::string &attributeName);
 
+    RC insertTablesRecord(const int table_id, const std::string &table_name, const std::string &file_name, const int systemTable);
+    RC insertTableColumnsRecords(const int table_id, std::vector<Attribute> descriptor);
+    RC insertColumnsRecord(FileHandle fileHandle, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position);
+
+    void prepareTablesDescriptor(std::vector<Attribute> &tablesDescriptor);
+    void prepareColumnsDescriptor(std::vector<Attribute> &columnsDescriptor);
+    void prepareTablesRecord(int tablesDescriptorSize, void *data, const int table_id, const std::string &table_name, const std::string &file_name, const int systemTable);
+    void prepareColumnsRecord(int columnsDescriptorSize, void *data, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position);
+
+    RC getTableId(std::string &tableName, int &tableId);
 protected:
     RelationManager();                                                  // Prevent construction
     ~RelationManager();                                                 // Prevent unwanted destruction
@@ -72,6 +82,8 @@ protected:
 
 private:
     static RelationManager *_relation_manager;
+    RecordBasedFileManager *_rbf_manager;
+    int numOfTables = 0;
 };
 
 #endif

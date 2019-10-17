@@ -60,16 +60,28 @@ typedef enum {
 
 class RBFM_ScanIterator {
 public:
-    RBFM_ScanIterator() = default;;
+    RBFM_ScanIterator();
 
     ~RBFM_ScanIterator() = default;;
 
     // Never keep the results in the memory. When getNextRecord() is called,
     // a satisfying record needs to be fetched from the file.
     // "data" follows the same format as RecordBasedFileManager::insertRecord().
-    RC getNextRecord(RID &rid, void *data) { return RBFM_EOF; };
+    RC getNextRecord(RID &rid, void *data);
 
-    RC close() { return -1; };
+    bool checkSatisfied(bool &satisfied, CompOp &comOp, void *value, void *searchValue);
+
+    RC close();
+
+    int cPage;
+    int cSlot;
+    FileHandle *fileHandle;
+    std::vector<Attribute> recordDescriptor;
+    int conditionAttributePosition;
+    CompOp compOp;
+    const void *value;
+    int *attributePositions;
+    std::vector<std::string> attributeNames;
 };
 
 class RecordBasedFileManager {
