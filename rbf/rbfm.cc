@@ -449,7 +449,44 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
 
 RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor,
                                          const RID &rid, const string &attributeName, void *data) {
-    return -1;
+    unsigned numberOfPages = fileHandle.getNumberOfPages();
+    if (rid.pageNum >= numberOfPages) {
+        return -1;
+    }
+    void *page = malloc(PAGE_SIZE);
+    fileHandle.readPage(rid.pageNum, page);
+    if (rid.slotNum >= this->getPageSlotTotal(page)) {
+        return -1;
+    }
+    int fieldCount = recordDescriptor.size();
+    int i;
+    for (i = 0; i < fieldCount; i++) {
+        Attribute attr = recordDescriptor[i];
+        if (attr.name == attributeName) {
+            break;
+        }
+    }
+    if (i == fieldCount) {
+        return -6;
+    }
+    RID *id = (RID *) malloc(sizeof(RID));
+    memcpy(id, &rid, sizeof(RID));
+    short recordOffset, recordSize;
+    this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
+    if (id == nullptr) {
+        return -5;
+    }
+    free(id);
+    int nullFlagSize = this->getNullFlagSize(fieldCount);
+    short pagePtr = recordOffset - recordSize;
+    short offset;
+    memcpy(&offset, (char *) page + pagePtr + nullFlagSize + i * sizeof(short), sizeof(short));
+    short prevOffset = 0;
+    if (i != 0) {
+        memcpy(&prevOffset, (char *) page + pagePtr + nullFlagSize + (i - 1) * sizeof(short), sizeof(short));
+    }
+    memcpy(data, (char *) page + pagePtr + prevOffset, offset - prevOffset);
+    return 0;
 }
 
 RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
