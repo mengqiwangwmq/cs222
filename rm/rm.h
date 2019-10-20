@@ -64,9 +64,14 @@ public:
 
     RC dropAttribute(const std::string &tableName, const std::string &attributeName);
 
+    bool isSystemTable(const string &tableName);
+
     RC insertTablesRecord(const int table_id, const std::string &table_name, const std::string &file_name, const int systemTable);
     RC insertTableColumnsRecords(const int table_id, std::vector<Attribute> descriptor);
     RC insertColumnsRecord(FileHandle fileHandle, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position);
+
+    void prepareTablesAttributeNames(vector<string> &attributeNames);
+    void prepareColumnsAttributeNames(vector<string> &attributeNames);
 
     void prepareTablesDescriptor(std::vector<Attribute> &tablesDescriptor);
     void prepareColumnsDescriptor(std::vector<Attribute> &columnsDescriptor);

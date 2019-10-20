@@ -69,7 +69,7 @@ public:
     // "data" follows the same format as RecordBasedFileManager::insertRecord().
     RC getNextRecord(RID &rid, void *data);
 
-    bool checkSatisfied(bool &satisfied, CompOp &comOp, void *value, void *searchValue);
+    bool checkSatisfied(bool &satisfied, CompOp &comOp, void *value, const void *searchValue, int length, int type);
 
     RC close();
 

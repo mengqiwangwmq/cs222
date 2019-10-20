@@ -540,11 +540,14 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
         if(cSlot > slotNum -1) {
             cPage ++;
             cSlot = 0;
-            fileHandle->readPage(cPage, page);
-            slotNum = rbfm.getPageSlotTotal(page);
-        }
-        if(cPage > fileHandle->getNumberOfPages() - 1) {
-            return RBFM_EOF;
+            if(cPage > fileHandle->getNumberOfPages() - 1) {
+                free(page);
+                return RBFM_EOF;
+            } else {
+                realloc(page, PAGE_SIZE);
+                fileHandle->readPage(cPage, page);
+                slotNum = rbfm.getPageSlotTotal(page);
+            }
         }
 
         short offset;
@@ -557,6 +560,11 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
         if(offset == -1) {
             valid = false;
         }
+
+        rid.pageNum = cPage;
+        rid.slotNum = cSlot;
+        // cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
+
         if(valid) {
             recordLength = rbfm.getRecordSize(page, cSlot);
             while(recordLength == -1) {
@@ -572,55 +580,98 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
             startOffset = offset - recordLength;
 
             // Get attribute offset
-            auto *nullFlags = (unsigned char *) std::malloc(recordDescriptor.size());
-            std::memcpy(nullFlags, (char *) page + startOffset, recordDescriptor.size());
+            int nullFieldsIndicatorSize = ceil((double)recordDescriptor.size() / CHAR_BIT);
+            auto *nullFlags = (unsigned char *) std::malloc(nullFieldsIndicatorSize);
+            std::memcpy(nullFlags, (char *) page + startOffset, nullFieldsIndicatorSize);
             int nullFieldsCounter = 0;
+            int offsetTableIndex = 0;
+            bool conditionalNullBit;
+            conditionalNullBit = nullFlags[conditionAttributePosition/8] & (unsigned) 1 << (unsigned) (7 - conditionAttributePosition%8);
             bool nullBit;
-            for(int i = 0; i <= conditionAttributePosition; i ++) {
-                nullBit = nullFlags[i] & (unsigned) 1 << (unsigned) (7 - i);
-                if(nullBit) {nullFieldsCounter ++;}
+            if(conditionAttributePosition == 0) {
+                offsetTableIndex = -1;
+
+            } else if(conditionAttributePosition > 0) {
+                for(int i = conditionAttributePosition - 1; i >= 0; i --) {
+                    nullBit = nullFlags[i/8] & (unsigned) 1 << (unsigned) (7 - i%8);
+                    if(!nullBit) {
+                        offsetTableIndex = i;
+                        break;
+                    }
+                }
             }
+            // cout<<"conditionalAttributePosition "<<conditionAttributePosition<<endl;
+
+
             int nullFieldsCounterTotal = nullFieldsCounter;
             for(int i = conditionAttributePosition; i < recordDescriptor.size(); i ++) {
                 nullBit = nullFlags[i] & (unsigned) 1 << (unsigned) (7 - i);
                 if(nullBit) {nullFieldsCounterTotal ++;}
             }
-            int attributeOffset;
-            memcpy(&attributeOffset, (char *)page + startOffset + recordDescriptor.size() / CHAR_BIT + (conditionAttributePosition-nullFieldsCounter)* sizeof(short), sizeof(short));
+            // cout<<"conditionAttributePosition is "<<conditionAttributePosition<<endl;
+            // cout<<"nullFieldsCounter"<<nullFieldsCounter<<endl;
+            // cout<<"startoffset "<<startOffset<<endl;
+
+
+            int testData;
+            memcpy(&testData, (char *)page + startOffset + 11, 4);
+            // cout<<testData<<endl;
+
+            short attributeOffset;
+
+            // cout<<"offsetTableIndex "<<offsetTableIndex<<endl;
+            // cout<<(offsetTableIndex == -1)<<endl;
+            if(offsetTableIndex == -1) {
+                attributeOffset = nullFieldsIndicatorSize + recordDescriptor.size() * sizeof(short);
+            } else {
+                memcpy(&attributeOffset, (char *)page + startOffset + nullFieldsIndicatorSize + offsetTableIndex* sizeof(short), sizeof(short));
+            }
+            // cout<<attributeOffset<<endl;
 
             if(compOp == NO_OP) {
                 satisfied = true;
-            } else if(!nullBit) {
-                int fieldOffset = startOffset + recordDescriptor.size() / CHAR_BIT + (recordDescriptor.size()-nullFieldsCounter)*sizeof(short) + attributeOffset;
+            } else if(!conditionalNullBit) {
+                int fieldOffset = startOffset + attributeOffset;
+                // cout<<fieldOffset<<endl;
                 if(recordDescriptor[conditionAttributePosition].type == TypeInt) {
                     int valueToCheck;
                     memcpy(&valueToCheck, (char *)page + fieldOffset, sizeof(int));
-                    checkSatisfied(satisfied, compOp, &valueToCheck, &value);
+                    // cout<<"table-id "<<valueToCheck<<endl;
+                    checkSatisfied(satisfied, compOp, &valueToCheck, value, -1, 1);
                 } else if(recordDescriptor[conditionAttributePosition].type == TypeReal) {
                     float valueToCheck;
                     memcpy(&valueToCheck, (char *)page + fieldOffset, sizeof(int));
-                    checkSatisfied(satisfied, compOp, &valueToCheck, &value);
+                    checkSatisfied(satisfied, compOp, &valueToCheck, value, -1, 2);
                 } else if(recordDescriptor[conditionAttributePosition].type = TypeVarChar) {
                     int length;
                     memcpy(&length, (char *)page + fieldOffset, sizeof(int));
-                    char *valueToCheck = (char *)malloc(length + 1);
-                    memcpy(&valueToCheck, (char *)page + fieldOffset + sizeof(int), length);
-                    valueToCheck[length] = '\0';
-                    int valueLength;
-                    memcpy(&valueLength, (char *)value, sizeof(int));
-                    char *valueString = (char *)malloc(valueLength + 1);
-                    memcpy(&valueString, (char *)value + sizeof(int), length);
-                    valueString[valueLength] = '\0';
-                    checkSatisfied(satisfied, compOp, valueToCheck, valueString);
+                    // cout<<length<<endl;
+                    char *valueToCheck = (char *)malloc(length);
+                    memcpy(valueToCheck, (char *)page + fieldOffset + sizeof(int), length);
+                    int valueToSearchLength;
+                    memcpy(&valueToSearchLength, (char *)value, sizeof(int));
+                    // cout<<valueToSearchLength<<endl;
+                    char *valueToSearch = (char *)malloc(valueToSearchLength);
+                    memcpy(valueToSearch, (char *)value + sizeof(int), valueToSearchLength);
+
+                    if(length != valueToSearchLength) {
+                        satisfied = false;
+                        continue;
+                    }
+
+                    checkSatisfied(satisfied, compOp, valueToCheck, valueToSearch, length, 3);
+
                     free(valueToCheck);
-                    free(valueString);
+                    free(valueToSearch);
                 }
 
+                // cout<<"satisfied "<<satisfied<<endl;
                 if(satisfied) {
-                    auto *returnedNullFlags = (char *)malloc(attributeNames.size() / CHAR_BIT);
-                    memset(returnedNullFlags, 0, attributeNames.size()/CHAR_BIT);
-                    int pageOffset = startOffset + recordDescriptor.size() / CHAR_BIT + (recordDescriptor.size()-nullFieldsCounter)*sizeof(short);
-                    int returnedDataOffset = attributeNames.size() / CHAR_BIT;
+                    int nullFlagsSize = ceil((double)attributeNames.size() / CHAR_BIT);
+                    auto *returnedNullFlags = (char *)malloc(nullFlagsSize);
+                    memset(returnedNullFlags, 0, nullFlagsSize);
+                    int pageOffset = startOffset + nullFieldsIndicatorSize + recordDescriptor.size()*sizeof(short);
+                    int dataOffset = nullFlagsSize;
                     for(int i = 0; i < attributeNames.size(); i ++) {
                         int attributePosition = attributePositions[i];
                         bool nullBit = nullFlags[attributePosition / CHAR_BIT] & (1 << (7 - attributePosition % CHAR_BIT));
@@ -628,54 +679,78 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                             returnedNullFlags[i/CHAR_BIT] |= (1 << (7 - i % CHAR_BIT));
                         } else {
                             if(recordDescriptor[attributePositions[i]].type == TypeInt) {
-                                memcpy((char *)data + returnedDataOffset, (char *)page + pageOffset, sizeof(int));
+                                memcpy((char *)data + dataOffset, (char *)page + pageOffset, sizeof(int));
                                 pageOffset += sizeof(int);
-                                returnedDataOffset += sizeof(int);
+                                dataOffset += sizeof(int);
                             } else if(recordDescriptor[attributePositions[i]].type == TypeReal) {
-                                memcpy((char *)data + returnedDataOffset, (char *)page + pageOffset, sizeof(int));
+                                memcpy((char *)data + dataOffset, (char *)page + pageOffset, sizeof(int));
                                 pageOffset += sizeof(int);
-                                returnedDataOffset += sizeof(int);
+                                dataOffset += sizeof(int);
                             } else if(recordDescriptor[attributePositions[i]].type == TypeVarChar) {
                                 int length;
-                                memcpy((char *)length, (char *)page + startOffset + attributeNames.size() / CHAR_BIT + offset, sizeof(int));
-                                memcpy((char *)data + returnedDataOffset, (char *)page + pageOffset, sizeof(int));
+                                memcpy(&length, (char *)page + pageOffset, sizeof(int));
+                                memcpy((char *)data + dataOffset, (char *)page + pageOffset, sizeof(int));
                                 pageOffset += sizeof(int);
-                                returnedDataOffset += sizeof(int);
-                                memcpy((char *)data + returnedDataOffset, (char *)page + pageOffset, length);
+                                dataOffset += sizeof(int);
+                                memcpy((char *)data + dataOffset, (char *)page + pageOffset, length);
                                 pageOffset += length;
-                                returnedDataOffset += length;
+                                dataOffset += length;
                             }
                         }
                     }
-                    memcpy((char *)data, (char *)returnedNullFlags, attributeNames.size() / CHAR_BIT);
+                    memcpy((char *)data, (char *)returnedNullFlags, nullFlagsSize);
+                    // rbfm.printRecord(recordDescriptor, data);
                     free(returnedNullFlags);
+                    return 0;
                 }
             }
             free(nullFlags);
         }
     }
-    free(page);
 }
-bool RBFM_ScanIterator::checkSatisfied(bool &satisfied, CompOp &comOp, void *valueToCheck, void *searchValue) {
+bool RBFM_ScanIterator::checkSatisfied(bool &satisfied, CompOp &comOp, void *valueToCheck, const void *searchValue, int length, int type) {
+    int v1;
+    int s1;
+    float v2;
+    float s2;
+    string v3;
+    string s3;
+    if(type == 1) {
+        memcpy(&v1, valueToCheck, sizeof(int));
+        memcpy(&s1, searchValue, sizeof(int));
+    } else if(type == 2) {
+        memcpy(&v2, valueToCheck, sizeof(int));
+        memcpy(&s2, valueToCheck, sizeof(int));
+    }
     switch (compOp)
     {
         case EQ_OP:
-            satisfied = value == searchValue;
+            if(length == -1) {
+                if(type == 1) {
+                    satisfied = v1 == s1;
+                } else if(type == 2) {
+                    satisfied = v2 == s2;
+                }
+
+            } else {
+                satisfied = (memcmp(valueToCheck, searchValue, length) == 0);
+                // cout<<satisfied<<endl;
+            }
             break;
         case LT_OP:
-            satisfied = value < searchValue;
+            satisfied = valueToCheck < searchValue;
             break;
         case LE_OP:
-            satisfied = value <= searchValue;
+            satisfied = valueToCheck <= searchValue;
             break;
         case GT_OP:
-            satisfied = value > searchValue;
+            satisfied = valueToCheck > searchValue;
             break;
         case GE_OP:
-            satisfied = value >= searchValue;
+            satisfied = valueToCheck >= searchValue;
             break;
         case NE_OP:
-            satisfied = value != searchValue;
+            satisfied = valueToCheck != searchValue;
             break;
         case NO_OP:
             satisfied = true;
