@@ -207,20 +207,80 @@ RC RelationManager::getAttributes(const std::string &tableName, std::vector<Attr
     return 0;
 }
 
-RC RelationManager::insertTuple(const std::string &tableName, const void *data, RID &rid) {
-    return -1;
+RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid) {
+    FileHandle fileHandle;
+    RC rc = _rbf_manager->openFile(tableName, fileHandle);
+
+    // Check if openFile succeeds
+    if(rc != 0) {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    this->getAttributes(tableName, recordDescriptor);
+    rc = _rbf_manager->insertRecord(fileHandle, recordDescriptor, data, rid);
+    if(rc != 0) {
+        return rc;
+    }
+    _rbf_manager->closeFile(fileHandle);
+    return 0;
 }
 
 RC RelationManager::deleteTuple(const std::string &tableName, const RID &rid) {
-    return -1;
+    FileHandle fileHandle;
+    RC rc = _rbf_manager->openFile(tableName, fileHandle);
+
+    // Check if openFile succeeds
+    if(rc != 0) {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    this->getAttributes(tableName, recordDescriptor);
+    rc = _rbf_manager->deleteRecord(fileHandle, recordDescriptor, rid);
+    if(rc != 0) {
+        return rc;
+    }
+    _rbf_manager->closeFile(fileHandle);
+    return 0;
 }
 
 RC RelationManager::updateTuple(const std::string &tableName, const void *data, const RID &rid) {
-    return -1;
+    FileHandle fileHandle;
+    RC rc = _rbf_manager->openFile(tableName, fileHandle);
+
+    // Check if openFile succeeds
+    if(rc != 0) {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    this->getAttributes(tableName, recordDescriptor);
+    rc = _rbf_manager->updateRecord(fileHandle, recordDescriptor, data, rid);
+    if(rc != 0) {
+        return rc;
+    }
+    _rbf_manager->closeFile(fileHandle);
+    return 0;
 }
 
 RC RelationManager::readTuple(const std::string &tableName, const RID &rid, void *data) {
-    return -1;
+    FileHandle fileHandle;
+    RC rc = _rbf_manager->openFile(tableName, fileHandle);
+
+    // Check if openFile succeeds
+    if(rc != 0) {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    this->getAttributes(tableName, recordDescriptor);
+    rc = _rbf_manager->readRecord(fileHandle, recordDescriptor, rid, data);
+    if(rc != 0) {
+        return rc;
+    }
+    _rbf_manager->closeFile(fileHandle);
+    return 0;
 }
 
 RC RelationManager::printTuple(const std::vector<Attribute> &attrs, const void *data) {
@@ -230,7 +290,22 @@ RC RelationManager::printTuple(const std::vector<Attribute> &attrs, const void *
 
 RC RelationManager::readAttribute(const std::string &tableName, const RID &rid, const std::string &attributeName,
                                   void *data) {
-    return -1;
+    FileHandle fileHandle;
+    RC rc = _rbf_manager->openFile(tableName, fileHandle);
+
+    // Check if openFile succeeds
+    if(rc != 0) {
+        return rc;
+    }
+
+    vector<Attribute> recordDescriptor;
+    this->getAttributes(tableName, recordDescriptor);
+    rc = _rbf_manager->readAttribute(fileHandle, recordDescriptor, rid, attributeName, data);
+    if(rc != 0) {
+        return rc;
+    }
+    _rbf_manager->closeFile(fileHandle);
+    return 0;
 }
 
 RC RelationManager::scan(const std::string &tableName,
