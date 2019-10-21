@@ -563,7 +563,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 
         rid.pageNum = cPage;
         rid.slotNum = cSlot;
-        // cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
+        cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
 
         if(valid) {
             recordLength = rbfm.getRecordSize(page, cSlot);
@@ -600,21 +600,13 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                     }
                 }
             }
-            // cout<<"conditionalAttributePosition "<<conditionAttributePosition<<endl;
-
-
-            int nullFieldsCounterTotal = nullFieldsCounter;
-            for(int i = conditionAttributePosition; i < recordDescriptor.size(); i ++) {
-                nullBit = nullFlags[i] & (unsigned) 1 << (unsigned) (7 - i);
-                if(nullBit) {nullFieldsCounterTotal ++;}
-            }
-            // cout<<"conditionAttributePosition is "<<conditionAttributePosition<<endl;
+            cout<<"conditionAttributePosition is "<<conditionAttributePosition<<endl;
             // cout<<"nullFieldsCounter"<<nullFieldsCounter<<endl;
             // cout<<"startoffset "<<startOffset<<endl;
 
 
-            int testData;
-            memcpy(&testData, (char *)page + startOffset + 11, 4);
+            // int testData;
+            // memcpy(&testData, (char *)page + startOffset + 11, 4);
             // cout<<testData<<endl;
 
             short attributeOffset;
@@ -626,7 +618,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
             } else {
                 memcpy(&attributeOffset, (char *)page + startOffset + nullFieldsIndicatorSize + offsetTableIndex* sizeof(short), sizeof(short));
             }
-            // cout<<attributeOffset<<endl;
+            cout<<attributeOffset<<endl;
 
             if(compOp == NO_OP) {
                 satisfied = true;
@@ -636,7 +628,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 if(recordDescriptor[conditionAttributePosition].type == TypeInt) {
                     int valueToCheck;
                     memcpy(&valueToCheck, (char *)page + fieldOffset, sizeof(int));
-                    // cout<<"table-id "<<valueToCheck<<endl;
+                    cout<<"table-id "<<valueToCheck<<endl;
                     checkSatisfied(satisfied, compOp, &valueToCheck, value, -1, 1);
                 } else if(recordDescriptor[conditionAttributePosition].type == TypeReal) {
                     float valueToCheck;
@@ -670,10 +662,33 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                     int nullFlagsSize = ceil((double)attributeNames.size() / CHAR_BIT);
                     auto *returnedNullFlags = (char *)malloc(nullFlagsSize);
                     memset(returnedNullFlags, 0, nullFlagsSize);
-                    int pageOffset = startOffset + nullFieldsIndicatorSize + recordDescriptor.size()*sizeof(short);
+                    int pageOffset;
                     int dataOffset = nullFlagsSize;
                     for(int i = 0; i < attributeNames.size(); i ++) {
                         int attributePosition = attributePositions[i];
+                        short off;
+                        int ind;
+                        if(attributePosition == 0) {
+                            ind = -1;
+                        } else if(attributePosition > 0) {
+                            for(int i = attributePosition-1; i >=0; i --) {
+                                bool null = nullFlags[i/8] & (unsigned) 1 << (unsigned) (7 - i%8);
+                                cout<<null<<endl;
+                                if(null == 0) {
+                                    ind = i;
+                                    cout<<ind<<endl;
+                                    break;
+                                }
+                            }
+                        }
+                        if(ind == -1) {
+                            off = nullFieldsIndicatorSize + recordDescriptor.size() * sizeof(short);
+                        } else {
+                            memcpy(&off, (char *)page + startOffset + nullFieldsIndicatorSize + ind * sizeof(short), sizeof(short));
+                        }
+                        cout<<"attribute offset "<<off<<endl;
+                        pageOffset = startOffset + off;
+
                         bool nullBit = nullFlags[attributePosition / CHAR_BIT] & (1 << (7 - attributePosition % CHAR_BIT));
                         if(nullBit) {
                             returnedNullFlags[i/CHAR_BIT] |= (1 << (7 - i % CHAR_BIT));
@@ -708,6 +723,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
         }
     }
 }
+
 bool RBFM_ScanIterator::checkSatisfied(bool &satisfied, CompOp &comOp, void *valueToCheck, const void *searchValue, int length, int type) {
     int v1;
     int s1;

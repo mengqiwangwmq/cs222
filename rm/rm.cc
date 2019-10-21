@@ -140,6 +140,51 @@ RC RelationManager::deleteTable(const std::string &tableName) {
 }
 
 RC RelationManager::getAttributes(const std::string &tableName, std::vector<Attribute> &attrs) {
+    int tableId;
+    getTableId(tableName, tableId);
+    cout<<"tableId "<<tableId<<endl;
+    cout<<"tableName"<<tableName<<endl;
+
+    FileHandle fileHandle;
+    RC rc = _rbf_manager->openFile("columns", fileHandle);
+    if(rc != 0) {
+        return -1;
+    }
+
+    vector<Attribute> columnsDescriptor;
+    vector<string> attrNames;
+    prepareColumnsDescriptor(columnsDescriptor);
+    attrNames.push_back("column-name");
+    attrNames.push_back("column-type");
+    attrNames.push_back("column-length");
+    string conditionalAttribute = "table-id";
+    CompOp compOp = EQ_OP;
+    auto *value = (char *)malloc(sizeof(int));
+    memcpy(value, &tableId, sizeof(int));
+    RBFM_ScanIterator scanIterator;
+    _rbf_manager->scan(fileHandle, columnsDescriptor, conditionalAttribute, compOp, value, attrNames, scanIterator);
+
+    auto *data = (char *)malloc(PAGE_SIZE);
+    RID rid;
+    while(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
+        vector<Attribute> projectedColumns;
+        Attribute attr;
+        attr.name = "column-name";
+        attr.type = TypeVarChar;
+        attr.length = 50;
+        projectedColumns.push_back(attr);
+        attr.name = "column-type";
+        attr.type = TypeInt;
+        attr.length = 4;
+        projectedColumns.push_back(attr);
+        attr.name = "column-length";
+        attr.type = TypeInt;
+        attr.length = 4;
+        projectedColumns.push_back(attr);
+
+        _rbf_manager->printRecord(projectedColumns, data);
+    }
+    return 0;
 }
 
 RC RelationManager::insertTuple(const std::string &tableName, const void *data, RID &rid) {
@@ -199,18 +244,38 @@ bool RelationManager::isSystemTable(const string &tableName) {
     return false;
 }
 
-RC RelationManager::getTableId(std::string &tableName, int &tableId) {
+RC RelationManager::getTableId(const std::string &tableName, int &tableId) {
     FileHandle fileHandle;
     RC rc = _rbf_manager->openFile("tables", fileHandle);
     if(rc != 0) {
         return rc;
     }
 
+    vector<Attribute> attrs;
+    vector<string> attrNames;
+    prepareTablesDescriptor(attrs);
+    attrNames.push_back("table-id");
+    string conditionalAttribute = "table-name";
     int length = tableName.size();
     char *value = (char *)malloc(length + sizeof(int));
     memcpy(value, &length, sizeof(int));
     memcpy(value + sizeof(int), tableName.c_str(), length);
+    CompOp compOp = EQ_OP;
 
+    RBFM_ScanIterator scanIterator = RBFM_ScanIterator();
+    _rbf_manager->scan(fileHandle, attrs, conditionalAttribute, compOp, value, attrNames, scanIterator);
+
+    auto *data = (char *)malloc(PAGE_SIZE);
+    RID rid;
+    if(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
+        memcpy(&tableId, (char *)data + sizeof(char), sizeof(int));
+        cout<<tableId<<endl;
+    }
+    fileHandle.closeFile();
+    scanIterator.close();
+    attrs.clear();
+    attrNames.clear();
+    return 0;
 }
 
 void RelationManager::prepareTablesAttributeNames(vector<string> &attributeNames) {
