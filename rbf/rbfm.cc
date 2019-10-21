@@ -517,6 +517,10 @@ RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attrib
     }
 
     // Get conditionalAttribute position
+    cout<<(conditionAttribute.empty() == true)<<endl;
+    if(conditionAttribute.empty()) {
+        return 0;
+    }
     int i;
     for(i = 0 ; i < recordDescriptor.size(); i ++) {
         if(recordDescriptor[i].name == conditionAttribute) {
@@ -528,6 +532,7 @@ RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attrib
         printf("[rbfm::scan] Cannot find attributes Id\n");
         return -7;
     }
+    return 0;
 }
 
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
