@@ -22,7 +22,7 @@ RC RelationManager::createCatalog() {
     numOfTables = 0;
     // FileName & tableMame
     const std::string tables = "Tables";
-    const std::string columns = "columns";
+    const std::string columns = "Columns";
 
     // If creating tables file succeeds, open the file and write records to it
     RC rc = _rbf_manager->createFile(tables);
@@ -38,7 +38,7 @@ RC RelationManager::createCatalog() {
     insertTablesRecord(++numOfTables, tables, tables, 1);
     insertTablesRecord(++numOfTables, columns, columns, 1);
 
-    // Populate "columns" table
+    // Populate "Columns" table
     std::vector<Attribute> tablesDescriptor;
     std::vector<Attribute> columnsDescriptor;
     prepareTablesDescriptor(tablesDescriptor);
@@ -53,7 +53,7 @@ RC RelationManager::deleteCatalog() {
     if(rc != 0) {
         return rc;
     }
-    rc = _rbf_manager->destroyFile("columns");
+    rc = _rbf_manager->destroyFile("Columns");
     if(rc != 0) {
         return rc;
     }
@@ -71,6 +71,7 @@ RC RelationManager::createTable(const std::string &tableName, const std::vector<
 
 RC RelationManager::deleteTable(const std::string &tableName) {
     // Delete tuple in tables
+    cout<<isSystemTable(tableName)<<endl;
     if(isSystemTable(tableName)) {
         // TODO: Add -8, delete system table, as error code
         return -8;
@@ -124,7 +125,7 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     value = (char *)malloc(sizeof(int));
     memcpy(value, &deletedTableId, sizeof(int));
     FileHandle columnsFileHandle;
-    _rbf_manager->openFile("columns", columnsFileHandle);
+    _rbf_manager->openFile("Columns", columnsFileHandle);
     _rbf_manager->scan(columnsFileHandle, attrs, conditionalAttribute, compOp, value, attributeNames, scanIterator);
     while(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
         _rbf_manager->printRecord(attrs, data);
@@ -146,7 +147,7 @@ RC RelationManager::getAttributes(const std::string &tableName, std::vector<Attr
     cout<<"tableName"<<tableName<<endl;
 
     FileHandle fileHandle;
-    RC rc = _rbf_manager->openFile("columns", fileHandle);
+    RC rc = _rbf_manager->openFile("Columns", fileHandle);
     if(rc != 0) {
         return -1;
     }
@@ -223,7 +224,8 @@ RC RelationManager::readTuple(const std::string &tableName, const RID &rid, void
 }
 
 RC RelationManager::printTuple(const std::vector<Attribute> &attrs, const void *data) {
-    return -1;
+    _rbf_manager->printRecord(attrs, data);
+    return 0;
 }
 
 RC RelationManager::readAttribute(const std::string &tableName, const RID &rid, const std::string &attributeName,
@@ -259,7 +261,7 @@ RC RelationManager::addAttribute(const std::string &tableName, const Attribute &
 bool RelationManager::isSystemTable(const string &tableName) {
     if(tableName == "Tables") {
         return true;
-    } else if(tableName == "columns") {
+    } else if(tableName == "Columns") {
         return true;
     }
     return false;
@@ -356,7 +358,7 @@ RC RelationManager::insertTablesRecord(const int table_id, const std::string &ta
 
 RC RelationManager::insertTableColumnsRecords(const int table_id, std::vector<Attribute> descriptor) {
     FileHandle fileHandle;
-    RC rc = _rbf_manager->openFile("columns", fileHandle);
+    RC rc = _rbf_manager->openFile("Columns", fileHandle);
     if(rc != 0) {
         return rc;
     }
@@ -490,7 +492,11 @@ void RelationManager::prepareColumnsRecord(int columnsDescriptorSize, void *data
 }
 
 RC RM_ScanIterator::getNextTuple(RID &rid, void *data) {
-    return scanIterator.getNextRecord(rid, data);
+    RC rc = scanIterator.getNextRecord(rid, data);
+    if(rc == RBFM_EOF) {
+        return RM_EOF;
+    }
+    return 0;
 }
 
 
