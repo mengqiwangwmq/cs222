@@ -387,7 +387,8 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     int fieldCount = recordDescriptor.size();
     char *offsetTable = (char *) malloc(fieldCount * sizeof(short));
     short newSize = this->parseRecord(recordDescriptor, data, offsetTable);
-    if (this->countRemainSpace(page, this->getPageFreeSpace(page) + recordSize, newSize, false) >= 0) {
+    short remainSpace = this->countRemainSpace(page, this->getPageFreeSpace(page) + recordSize, newSize, false);
+    if (remainSpace >= 0) {
         short distance = newSize - recordSize;
         if (distance <= 0) {
             this->copyRecord(page, recordOffset - recordSize, fieldCount,
@@ -398,6 +399,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
             this->copyRecord(page, recordOffset - recordSize, fieldCount,
                              data, offsetTable, newSize);
         }
+        this->setPageFreeSpace(page, remainSpace);
         this->setRecordOffset(page, recordOffset + distance, id->slotNum);
         this->setRecordSize(page, newSize, id->slotNum);
     } else {
@@ -485,7 +487,16 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     if (i != 0) {
         memcpy(&prevOffset, (char *) page + pagePtr + nullFlagSize + (i - 1) * sizeof(short), sizeof(short));
     }
-    memcpy(data, (char *) page + pagePtr + prevOffset, offset - prevOffset);
+    short sz = offset - prevOffset;
+    if (sz == 0) {
+        bool nullflag = false;
+        memcpy(data, &nullflag, sizeof(bool));
+    } else {
+        bool nullflag = true;
+        memcpy(data, &nullflag, sizeof(bool));
+        memcpy((char *) data + sizeof(bool), (char *) page + pagePtr + prevOffset, offset - prevOffset);
+    }
+    free(page);
     return 0;
 }
 
@@ -517,7 +528,7 @@ RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attrib
     }
 
     // Get conditionalAttribute position
-    cout<<(conditionAttribute.empty() == true)<<endl;
+//    cout<<(conditionAttribute.empty() == true)<<endl;
     if(conditionAttribute.empty()) {
         rbfm_ScanIterator.conditionAttributePosition = -1;
         return 0;
@@ -571,7 +582,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 
         rid.pageNum = cPage;
         rid.slotNum = cSlot;
-        cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
+//        cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
 
         if(valid) {
             recordLength = rbfm.getRecordSize(page, cSlot);
@@ -626,7 +637,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
             } else {
                 memcpy(&attributeOffset, (char *)page + startOffset + nullFieldsIndicatorSize + offsetTableIndex* sizeof(short), sizeof(short));
             }
-            cout<<attributeOffset<<endl;
+//            cout<<attributeOffset<<endl;
 
             if(compOp == NO_OP) {
                 satisfied = true;
@@ -636,7 +647,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 if(recordDescriptor[conditionAttributePosition].type == TypeInt) {
                     int valueToCheck;
                     memcpy(&valueToCheck, (char *)page + fieldOffset, sizeof(int));
-                    cout<<"table-id "<<valueToCheck<<endl;
+//                    cout<<"table-id "<<valueToCheck<<endl;
                     checkSatisfied(satisfied, compOp, &valueToCheck, value, -1, 1);
                 } else if(recordDescriptor[conditionAttributePosition].type == TypeReal) {
                     float valueToCheck;
@@ -668,7 +679,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 
             }
 
-            cout<<"satisfied "<<satisfied<<endl;
+//            cout<<"satisfied "<<satisfied<<endl;
             if(satisfied) {
                 int nullFlagsSize = ceil((double)attributeNames.size() / CHAR_BIT);
                 auto *returnedNullFlags = (char *)malloc(nullFlagsSize);
@@ -684,10 +695,10 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                     } else if(attributePosition > 0) {
                         for(int i = attributePosition-1; i >=0; i --) {
                             bool null = nullFlags[i/8] & (unsigned) 1 << (unsigned) (7 - i%8);
-                            cout<<null<<endl;
+//                            cout<<null<<endl;
                             if(null == 0) {
                                 ind = i;
-                                cout<<ind<<endl;
+//                                cout<<ind<<endl;
                                 break;
                             }
                         }
@@ -697,7 +708,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                     } else {
                         memcpy(&off, (char *)page + startOffset + nullFieldsIndicatorSize + ind * sizeof(short), sizeof(short));
                     }
-                    cout<<"attribute offset "<<off<<endl;
+//                    cout<<"attribute offset "<<off<<endl;
                     pageOffset = startOffset + off;
 
                     bool nullBit = nullFlags[attributePosition / CHAR_BIT] & (1 << (7 - attributePosition % CHAR_BIT));

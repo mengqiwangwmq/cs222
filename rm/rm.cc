@@ -144,8 +144,8 @@ RC RelationManager::deleteTable(const std::string &tableName) {
 RC RelationManager::getAttributes(const std::string &tableName, std::vector<Attribute> &attrs) {
     int tableId;
     getTableId(tableName, tableId);
-    cout<<"tableId "<<tableId<<endl;
-    cout<<"tableName"<<tableName<<endl;
+//    cout<<"tableId "<<tableId<<endl;
+//    cout<<"tableName"<<tableName<<endl;
 
     FileHandle fileHandle;
     RC rc = _rbf_manager->openFile("Columns", fileHandle);
@@ -185,24 +185,24 @@ RC RelationManager::getAttributes(const std::string &tableName, std::vector<Attr
         attr.length = 4;
         projectedColumns.push_back(attr);
 
-        _rbf_manager->printRecord(projectedColumns, data);
+//        _rbf_manager->printRecord(projectedColumns, data);
 
         offset = ceil((double)projectedColumns.size()/CHAR_BIT);
         Attribute returnedAttr;
         int length;
         memcpy(&length, (char *)data + offset, sizeof(int));
-        cout<<length<<endl;
+//        cout<<length<<endl;
         offset += sizeof(int);
         char *name = (char *)malloc(length);
         memcpy(name, (char *)data + offset, length);
         returnedAttr.name = string(name, length);
-        cout<<returnedAttr.name<<endl;
+//        cout<<returnedAttr.name<<endl;
         offset += length;
         memcpy(&returnedAttr.type, (char *)data + offset, sizeof(int));
         offset += sizeof(int);
-        cout<<returnedAttr.type<<endl;
+//        cout<<returnedAttr.type<<endl;
         memcpy(&returnedAttr.length, (char *)data + offset, sizeof(int));
-        cout<<returnedAttr.length<<endl;
+//        cout<<returnedAttr.length<<endl;
         attrs.push_back(returnedAttr);
     }
     return 0;
@@ -386,7 +386,7 @@ RC RelationManager::getTableId(const std::string &tableName, int &tableId) {
     RID rid;
     if(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
         memcpy(&tableId, (char *)data + sizeof(char), sizeof(int));
-        cout<<tableId<<endl;
+//        cout<<tableId<<endl;
     }
     fileHandle.closeFile();
     scanIterator.close();
