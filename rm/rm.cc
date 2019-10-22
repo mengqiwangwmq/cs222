@@ -64,8 +64,9 @@ RC RelationManager::createTable(const std::string &tableName, const std::vector<
     _rbf_manager->createFile(tableName);
     FileHandle fileHandle;
     _rbf_manager->openFile("Tables", fileHandle);
-    insertTablesRecord(++numOfTables, tableName, tableName, 0);
-    insertTableColumnsRecords(numOfTables, attrs);
+    int tableId = generateNedtTableId();
+    insertTablesRecord(tableId, tableName, tableName, 0);
+    insertTableColumnsRecords(tableId, attrs);
     return 0;
 }
 
@@ -331,6 +332,24 @@ RC RelationManager::dropAttribute(const std::string &tableName, const std::strin
 // Extra credit work
 RC RelationManager::addAttribute(const std::string &tableName, const Attribute &attr) {
     return -1;
+}
+
+int RelationManager::generateNedtTableId() {
+    int tableNum = 0;
+    FileHandle fileHandle;
+    _rbf_manager->openFile("Tables", fileHandle);
+    vector<Attribute> tablesDescriptor;
+    vector<string> attributeNames;
+    prepareTablesDescriptor(tablesDescriptor);
+    prepareTablesAttributeNames(attributeNames);
+    RBFM_ScanIterator scanIterator;
+    _rbf_manager->scan(fileHandle, tablesDescriptor, "", NO_OP, NULL, attributeNames, scanIterator);
+    RID rid;
+    auto *data = (char *)malloc(PAGE_SIZE);
+    while(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
+        tableNum ++;
+    }
+    return ++tableNum;
 }
 
 bool RelationManager::isSystemTable(const string &tableName) {

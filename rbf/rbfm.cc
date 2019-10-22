@@ -550,7 +550,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 free(page);
                 return RBFM_EOF;
             } else {
-                realloc(page, PAGE_SIZE);
+                // realloc(page, PAGE_SIZE);
+                free(page);
+                page = (char *)malloc(PAGE_SIZE);
                 fileHandle.readPage(cPage, page);
                 slotNum = rbfm.getPageSlotTotal(page);
             }
@@ -607,8 +609,8 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 }
             }
             cout<<"conditionAttributePosition is "<<conditionAttributePosition<<endl;
-            // cout<<"nullFieldsCounter"<<nullFieldsCounter<<endl;
-            // cout<<"startoffset "<<startOffset<<endl;
+            cout<<"nullFieldsCounter"<<nullFieldsCounter<<endl;
+            cout<<"startoffset "<<startOffset<<endl;
 
 
             // int testData;

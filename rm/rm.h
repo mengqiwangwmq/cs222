@@ -80,6 +80,7 @@ public:
     void prepareTablesRecord(int tablesDescriptorSize, void *data, const int table_id, const std::string &table_name, const std::string &file_name, const int systemTable);
     void prepareColumnsRecord(int columnsDescriptorSize, void *data, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position);
 
+    int generateNedtTableId();
     RC getTableId(const std::string &tableName, int &tableId);
 protected:
     RelationManager();                                                  // Prevent construction
