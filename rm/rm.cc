@@ -315,12 +315,20 @@ RC RelationManager::scan(const std::string &tableName,
                          const void *value,
                          const std::vector<std::string> &attributeNames,
                          RM_ScanIterator &rm_ScanIterator) {
-
     vector<Attribute> recordDescriptor;
     getAttributes(tableName, recordDescriptor);
     rm_ScanIterator.scanIterator = RBFM_ScanIterator();
     FileHandle fileHandle;
     _rbf_manager->openFile(tableName, fileHandle);
+    /*
+    RID rid;
+    rid.slotNum = 13;
+    rid.pageNum = 0;
+    auto *testData = (char *)malloc(PAGE_SIZE);
+    RC rc = _rbf_manager->readRecord(fileHandle, recordDescriptor, rid, testData);
+    cout<<rc<<endl;
+    _rbf_manager->printRecord(recordDescriptor, testData);
+     */
     return _rbf_manager->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, rm_ScanIterator.scanIterator);
 }
 

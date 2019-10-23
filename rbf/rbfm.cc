@@ -582,7 +582,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 
         rid.pageNum = cPage;
         rid.slotNum = cSlot;
-//        cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
+        // cout<<offset<<endl;
+        // cout<<valid;
+        // cout<<"cPage : "<<cPage<<" "<<"cSlot "<<cSlot<<endl;
 
         if(valid) {
             recordLength = rbfm.getRecordSize(page, cSlot);
@@ -592,9 +594,19 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 startOffset = offset - sizeof(int) - sizeof(short);
                 memcpy(&tPage, (char *)page + startOffset, sizeof(int));
                 memcpy(&tSlot, (char *)page + startOffset + sizeof(int), sizeof(short));
-                fileHandle.readPage(tPage, page);
-                offset = rbfm.getRecordOffset(page, tSlot);
+                auto *tPageData = (char *)malloc(PAGE_SIZE);
+                fileHandle.readPage(tPage, tPageData);
+                offset = rbfm.getRecordOffset(tPageData, tSlot);
+                if(offset == -1) {
+                    // cout<<"there"<<endl;
+                    valid = false;
+                    break;
+                }
                 recordLength = rbfm.getRecordSize(page, tSlot);
+                free(tPageData);
+            }
+            if(valid == false) {
+                continue;
             }
             startOffset = offset - recordLength;
 
@@ -619,9 +631,9 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                     }
                 }
             }
-            cout<<"conditionAttributePosition is "<<conditionAttributePosition<<endl;
-            cout<<"nullFieldsCounter"<<nullFieldsCounter<<endl;
-            cout<<"startoffset "<<startOffset<<endl;
+            // cout<<"conditionAttributePosition is "<<conditionAttributePosition<<endl;
+            // cout<<"nullFieldsCounter"<<nullFieldsCounter<<endl;
+            // cout<<"startoffset "<<startOffset<<endl;
 
 
             // int testData;
@@ -647,7 +659,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 if(recordDescriptor[conditionAttributePosition].type == TypeInt) {
                     int valueToCheck;
                     memcpy(&valueToCheck, (char *)page + fieldOffset, sizeof(int));
-//                    cout<<"table-id "<<valueToCheck<<endl;
+                    // cout<<"Age "<<valueToCheck<<endl;
                     checkSatisfied(satisfied, compOp, &valueToCheck, value, -1, 1);
                 } else if(recordDescriptor[conditionAttributePosition].type == TypeReal) {
                     float valueToCheck;
@@ -677,6 +689,8 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 }
 
 
+            } else if(conditionalNullBit) {
+                continue;
             }
 
 //            cout<<"satisfied "<<satisfied<<endl;
@@ -775,13 +789,29 @@ bool RBFM_ScanIterator::checkSatisfied(bool &satisfied, CompOp &comOp, void *val
             }
             break;
         case LT_OP:
-            satisfied = valueToCheck < searchValue;
+            if(length == -1) {
+                if(type == 1) {
+                    satisfied = v1 < s1;
+                } else if(type == 2) {
+                    satisfied = v2 < s2;
+                }
+            } else {
+                satisfied = valueToCheck < searchValue;
+            }
             break;
         case LE_OP:
             satisfied = valueToCheck <= searchValue;
             break;
         case GT_OP:
-            satisfied = valueToCheck > searchValue;
+            if(length == -1) {
+                if(type == 1) {
+                    satisfied = v1 > s1;
+                } else if(type == 2) {
+                    satisfied = v2 > s2;
+                }
+            } else {
+                satisfied = valueToCheck < searchValue;
+            }
             break;
         case GE_OP:
             satisfied = valueToCheck >= searchValue;
