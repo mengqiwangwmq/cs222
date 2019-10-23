@@ -72,7 +72,6 @@ RC RelationManager::createTable(const std::string &tableName, const std::vector<
 
 RC RelationManager::deleteTable(const std::string &tableName) {
     // Delete tuple in tables
-    cout<<isSystemTable(tableName)<<endl;
     if(isSystemTable(tableName)) {
         // TODO: Add -8, delete system table, as error code
         return -8;
@@ -103,14 +102,11 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     if(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
         _rbf_manager->printRecord(attrs, data);
         memcpy(&deletedTableId, (char *)data + sizeof(char), sizeof(int));
-        cout<<deletedTableId<<endl;
         int length;
         memcpy(&length, (char *)data + 5, sizeof(int));
-        cout<<"the length of deleted table name is "<<length<<endl;
         char *tableName = (char *)malloc(length);
         memcpy(tableName, (char *)data + 9, length);
         deletedTableName = string(tableName, length);
-        cout<<"deletedTableName is "<<deletedTableName<<endl;
     }
     _rbf_manager->deleteRecord(tablesFileHandle, attrs, rid);
     _rbf_manager->destroyFile(deletedTableName);
@@ -320,15 +316,7 @@ RC RelationManager::scan(const std::string &tableName,
     rm_ScanIterator.scanIterator = RBFM_ScanIterator();
     FileHandle fileHandle;
     _rbf_manager->openFile(tableName, fileHandle);
-    /*
-    RID rid;
-    rid.slotNum = 13;
-    rid.pageNum = 0;
-    auto *testData = (char *)malloc(PAGE_SIZE);
-    RC rc = _rbf_manager->readRecord(fileHandle, recordDescriptor, rid, testData);
-    cout<<rc<<endl;
-    _rbf_manager->printRecord(recordDescriptor, testData);
-     */
+
     return _rbf_manager->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, rm_ScanIterator.scanIterator);
 }
 
