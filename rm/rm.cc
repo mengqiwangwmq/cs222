@@ -99,14 +99,20 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     int deletedTableId;
     RID rid;
     auto * data = (char *)malloc(PAGE_SIZE);
+    int cout = 0;
     if(scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
         _rbf_manager->printRecord(attrs, data);
+        cout ++;
         memcpy(&deletedTableId, (char *)data + sizeof(char), sizeof(int));
         int length;
         memcpy(&length, (char *)data + 5, sizeof(int));
         char *tableName = (char *)malloc(length);
         memcpy(tableName, (char *)data + 9, length);
         deletedTableName = string(tableName, length);
+    }
+    if (cout == 0) {
+        // Error code: table to be deleted doesn't exist
+        return -9;
     }
     _rbf_manager->deleteRecord(tablesFileHandle, attrs, rid);
     _rbf_manager->destroyFile(deletedTableName);

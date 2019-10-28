@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <cstring>
 
 #include "../rbf/rbfm.h"
 
