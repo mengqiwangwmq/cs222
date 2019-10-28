@@ -32,7 +32,7 @@ RC PagedFileManager::createFile(const string &fileName) {
     FILE *file = fopen(fileName.c_str(), "w");
     if (file) {
         char *hiddenPage = new char[PAGE_SIZE];
-
+        memset(hiddenPage, 0, PAGE_SIZE);
         unsigned cache = 0;
         // Allocate space for readPageCounter
         memcpy(hiddenPage + 0 * sizeof(unsigned), &cache, sizeof(unsigned));
@@ -42,6 +42,7 @@ RC PagedFileManager::createFile(const string &fileName) {
         memcpy(hiddenPage + 2 * sizeof(unsigned), &cache, sizeof(unsigned));
 
         fwrite(hiddenPage, sizeof(char), PAGE_SIZE, file);
+        free(hiddenPage);
         fclose(file);
         return 0;
     }
