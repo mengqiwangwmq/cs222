@@ -1,11 +1,11 @@
 1. Basic information
 Team number (e.g., 01):
-#1 Student ID:
-#1 Student Name:
-#2 Student ID:
-#2 Student Name:
-OS (bit):
-gcc version:
+#1 Student ID: szeng5
+#1 Student Name: Shi Zeng
+#2 Student ID: mengqw3
+#2 Student Name: Mengqi Wang
+OS (bit): 64-bit
+gcc version: 5.4.0
 
 
 2. Meta-data
@@ -19,6 +19,20 @@ gcc version:
 
 - Describe how you deal with an update and delete.
 
+NullValuesIndicator|FieldOffsets|Length|VarChar|Unsigned|Real
+
+FieldOffsets - offset1|offset2|…|offsetN
+Offset - short, points to the end of field
+
+For VarChar, a unsigned indicating the length is set ahead of the field
+
+Delete - For deleted record, the slot offset is set to -1, the following records will be shifted as a whole chunk record-size bytes forward to fill the empty space left by the deleted record.
+The reuse of deleted slot is supported, thus before shifting the following chunk, we need to iterate the the slot table.
+
+Update - There are basically three situations we need to considerate.
+1) If the updated record has smaller size than the original one, we do the same thing pretty much like delete, which means shifting the following records as a whole chunk.
+2) If the updated record has larger size than the original one and there is enough space in the same page, we shift the following records backwards.
+3) If the updated record has larger size and cannot fit in the same page, we store the new page number and slot number that actually hold the record in the original space with 6 bytes and retrieve the actual record using the rid.
 
 4. Page Format
 - Show your page format design.
@@ -27,10 +41,22 @@ gcc version:
 
 - Show your page format design
 
+Record1|Record2|…|RecordN|———Empty Space———|RecordOffsetN|…|RecordOffset2|RecordOffset1|NumberOfEmptyBytes|NumberOfRecord
+                                            -------------   ------------- -------------
+                                           | RecordSizeN |…| RecordSize2 | RecordSize1 |
+RecordOffset - short, points to the end of a record, -1 for deleted record
+RecordSize - short, -1 for the record stored at another page and have the pointer stored in current page
+Pointer - 6 bytes, consists of a page number as an int, and a slot number as a short, thus the record size has the minimum threshold, 6 bytes. When record size is less than 6 bytes, we need to reserve an empty space no less than 6 bytes.
+NumberOfEmptyBytes - short
+NumberOfRecord - short
+
 
 5. File Format
 - Show your file format design
 
+Hidden page|page1|page2|…|pageN
+
+Hidden page - Contains record read, write and append counters.
 
 6. Implementation Detail
 - Other implementation details goes here.
