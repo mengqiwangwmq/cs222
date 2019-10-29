@@ -253,6 +253,7 @@ void RecordBasedFileManager::locateRecord(FileHandle &fileHandle, void *page,
                                           short *recordOffset, short *recordSize, RID* &id) {
     *recordOffset = this->getRecordOffset(page, id->slotNum);
     if (*recordOffset == -1) {
+        free(id);
         id = nullptr;
         return;
     }
@@ -269,6 +270,7 @@ void RecordBasedFileManager::locateRecord(FileHandle &fileHandle, void *page,
         fileHandle.readPage(id->pageNum, page);
         *recordOffset = this->getRecordOffset(page, id->slotNum);
         if (*recordOffset == -1) {
+            free(id);
             id = nullptr;
             return;
         }
@@ -313,6 +315,7 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     memcpy(id, &rid, sizeof(RID));
     this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
     if (id == nullptr) {
+        free(page);
         return -5;
     }
     this->shiftRecord(page, recordOffset, -recordSize);
@@ -376,6 +379,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         return -1;
     }
     void *page = malloc(PAGE_SIZE);
+    memset(page, '\0', PAGE_SIZE);
     fileHandle.readPage(rid.pageNum, page);
     short slotTotal = this->getPageSlotTotal(page);
     if (rid.slotNum >= slotTotal) {
@@ -386,6 +390,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     memcpy(id, &rid, sizeof(RID));
     this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
     if (id == nullptr) {
+        free(page);
         return -5;
     }
     int fieldCount = recordDescriptor.size();
@@ -408,6 +413,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         this->setRecordSize(page, newSize, id->slotNum);
     } else {
         char *cache = (char *) malloc(PAGE_SIZE);
+        memset(cache, '\0', PAGE_SIZE);
         unsigned pageNum = 0;
         for (pageNum = 0; pageNum < numberOfPages; pageNum++) {
             if (pageNum == id->pageNum) continue;
@@ -480,6 +486,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     short recordOffset, recordSize;
     this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
     if (id == nullptr) {
+        free(page);
         return -5;
     }
     free(id);
