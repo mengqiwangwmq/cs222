@@ -841,6 +841,10 @@ RC RBFM_ScanIterator::close()
 {
     cPage = 0;
     cSlot = -1;
+
+    attributeNames.clear();
+    recordDescriptor.clear();
+    fileHandle.closeFile();
     return 0;
 }
 

@@ -116,7 +116,7 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     }
     _rbf_manager->deleteRecord(tablesFileHandle, attrs, rid);
     _rbf_manager->destroyFile(deletedTableName);
-    _rbf_manager->closeFile(tablesFileHandle);
+    // _rbf_manager->closeFile(tablesFileHandle);
     scanIterator.close();
     attrs.clear();
     attributeNames.clear();
@@ -135,8 +135,10 @@ RC RelationManager::deleteTable(const std::string &tableName) {
         _rbf_manager->deleteRecord(columnsFileHandle, attrs, rid);
     }
 
-    columnsFileHandle.closeFile();
+    // columnsFileHandle.closeFile();
     scanIterator.close();
+    attrs.clear();
+    attributeNames.clear();
 
     free(data);
     free(value);
@@ -207,6 +209,10 @@ RC RelationManager::getAttributes(const std::string &tableName, std::vector<Attr
 //        cout<<returnedAttr.length<<endl;
         attrs.push_back(returnedAttr);
     }
+
+    free(value);
+    scanIterator.close();
+
     return 0;
 }
 
@@ -319,9 +325,12 @@ RC RelationManager::scan(const std::string &tableName,
                          RM_ScanIterator &rm_ScanIterator) {
     vector<Attribute> recordDescriptor;
     getAttributes(tableName, recordDescriptor);
-    rm_ScanIterator.scanIterator = RBFM_ScanIterator();
     FileHandle fileHandle;
-    _rbf_manager->openFile(tableName, fileHandle);
+    RC rc = _rbf_manager->openFile(tableName, fileHandle);
+    if(rc != 0) {
+        cout<<rc<<endl;
+        return -1;
+    }
 
     return _rbf_manager->scan(fileHandle, recordDescriptor, conditionAttribute, compOp, value, attributeNames, rm_ScanIterator.scanIterator);
 }
@@ -597,5 +606,8 @@ RC RM_ScanIterator::getNextTuple(RID &rid, void *data) {
     return 0;
 }
 
+RC RM_ScanIterator::close() {
+    scanIterator.close();
+}
 
 
