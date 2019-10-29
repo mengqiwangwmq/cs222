@@ -738,6 +738,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 memcpy((char *)data, (char *)returnedNullFlags, nullFlagsSize);
                 free(returnedNullFlags);
                 free(page);
+                free(nullFlags);
                 return 0;
             }
             free(nullFlags);
@@ -858,6 +859,7 @@ RC RBFM_ScanIterator::close()
 
     attributeNames.clear();
     recordDescriptor.clear();
+    free(attributePositions);
     return 0;
 }
 

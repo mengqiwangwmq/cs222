@@ -586,6 +586,7 @@ void RelationManager::prepareTablesRecord(int tablesDescriptorSize, void *data, 
     offset += length;
     memcpy((char *)data + offset, &systemTable, sizeof(int));
     offset += sizeof(int);
+    free(nullFieldsIndicator);
 }
 
 void RelationManager::prepareColumnsRecord(int columnsDescriptorSize, void *data, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position) {
@@ -608,6 +609,7 @@ void RelationManager::prepareColumnsRecord(int columnsDescriptorSize, void *data
     offset += sizeof(int);
     memcpy((char *)data + offset, &column_position, sizeof(int));
     offset += sizeof(int);
+    free(nullFieldsIndicator);
 }
 
 RC RM_ScanIterator::getNextTuple(RID &rid, void *data) {
