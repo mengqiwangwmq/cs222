@@ -440,9 +440,11 @@ RC RelationManager::insertTablesRecord(const int table_id, const std::string &ta
         return rc;
     }
 
+    /*
     auto *testData = (char *)malloc(PAGE_SIZE);
     _rbf_manager->readRecord(fileHandle, tablesDescriptor, rid, testData);
     _rbf_manager->printRecord(tablesDescriptor, testData);
+     */
     rc = _rbf_manager->closeFile(fileHandle);
     // Check if closeFile succeeds
     if(rc != 0){
