@@ -21,6 +21,7 @@ public:
 
     RC close();
 
+    FileHandle fileHandle;
     RBFM_ScanIterator scanIterator;
 };
 

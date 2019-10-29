@@ -225,6 +225,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     void *page = malloc(PAGE_SIZE);
     fileHandle.readPage(rid.pageNum, page);
     if (rid.slotNum >= this->getPageSlotTotal(page)) {
+        free(page);
         return -1;
     }
     RID *id = (RID *) malloc(sizeof(RID));
@@ -232,6 +233,7 @@ RC RecordBasedFileManager::readRecord(FileHandle &fileHandle, const vector<Attri
     short recordOffset, recordSize;
     this->locateRecord(fileHandle, page, &recordOffset, &recordSize, id);
     if (id == nullptr) {
+        free(page);
         return -5;
     }
     free(id);
@@ -726,6 +728,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 }
                 memcpy((char *)data, (char *)returnedNullFlags, nullFlagsSize);
                 free(returnedNullFlags);
+                free(page);
                 return 0;
             }
             free(nullFlags);
@@ -755,6 +758,8 @@ bool RBFM_ScanIterator::checkSatisfied(bool &satisfied, CompOp &comOp, void *val
         sChar[length] = '\0';
         v3 = string(vChar);
         s3 = string(sChar);
+        free(vChar);
+        free(sChar);
     }
     switch (compOp)
     {
@@ -844,7 +849,6 @@ RC RBFM_ScanIterator::close()
 
     attributeNames.clear();
     recordDescriptor.clear();
-    fileHandle.closeFile();
     return 0;
 }
 
