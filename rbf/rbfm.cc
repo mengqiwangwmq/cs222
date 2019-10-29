@@ -170,6 +170,7 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
     char *offsetTable = (char *) malloc(recordDescriptor.size() * sizeof(short));
     short recordSize = this->parseRecord(recordDescriptor, data, offsetTable);
     void *page = malloc(PAGE_SIZE);
+    memset(page, '\0', PAGE_SIZE);
     unsigned numberOfPages = fileHandle.getNumberOfPages();
     bool needNewPage = true;
     unsigned currentPID = 0;
@@ -347,6 +348,7 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
                 memcpy(value, (char *) data + dataPtr, nameLength);
                 dataPtr += nameLength;
                 cout << string(value, nameLength) << " ";
+                free(value);
             } else if (attr.type == TypeInt) {
                 int value;
                 memcpy(&value, (char *) data + dataPtr, attr.length);
