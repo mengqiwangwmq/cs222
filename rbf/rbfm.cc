@@ -182,22 +182,25 @@ RC RecordBasedFileManager::insertRecord(FileHandle &fileHandle, const vector<Att
         remainSpace = this->countRemainSpace(page, this->getPageFreeSpace(page),
                                              recordSize, true);
         if (remainSpace < 0) {
-            for (int i = 0; i < numberOfPages - 1; i++) {
-                fileHandle.readPage(i, page);
-                remainSpace = this->countRemainSpace(page, this->getPageFreeSpace(page),
-                                                     recordSize, true);
-                if (remainSpace >= 0) {
-                    currentPID = i;
-                    break;
+            needNewPage = true;
+            if (numberOfPages > 1) {
+                for (int i = numberOfPages - 2; i >= 0; i--) {
+                    fileHandle.readPage(i, page);
+                    remainSpace = this->countRemainSpace(page, this->getPageFreeSpace(page),
+                                                         recordSize, true);
+                    if (remainSpace >= 0) {
+                        needNewPage = false;
+                        currentPID = i;
+                        break;
+                    }
                 }
             }
-            needNewPage = true;
         }
     }
     if (needNewPage) {
         this->setPageFreeSpace(page, PAGE_SIZE - 2 * sizeof(short));
         this->setPageSlotTotal(page, 0);
-        remainSpace = this->countRemainSpace(page, this->getPageFreeSpace(page),
+        remainSpace = this->countRemainSpace(page, PAGE_SIZE - 2 * sizeof(short),
                                recordSize, true);
         numberOfPages++;
         currentPID = numberOfPages - 1;
@@ -421,35 +424,36 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
     } else {
         char *cache = (char *) malloc(PAGE_SIZE);
         memset(cache, '\0', PAGE_SIZE);
-        unsigned pageNum = 0;
-        for (pageNum = 0; pageNum < numberOfPages; pageNum++) {
-            if (pageNum == id->pageNum) continue;
-            fileHandle.readPage(pageNum, cache);
-            if (this->countRemainSpace(cache, this->getPageFreeSpace(cache), newSize, true) >= 0) {
-                break;
+        unsigned pageNum = numberOfPages;
+        if (numberOfPages > 1) {
+            for (pageNum = numberOfPages - 1; pageNum >= 0, pageNum--;) {
+                if (pageNum == id->pageNum) continue;
+                fileHandle.readPage(pageNum, cache);
+                remainSpace = this->countRemainSpace(cache, this->getPageFreeSpace(cache), newSize, true);
+                if (remainSpace >= 0) {
+                    break;
+                }
             }
         }
         if (pageNum == numberOfPages) {
             this->setPageFreeSpace(cache, PAGE_SIZE - 2 * sizeof(short));
             this->setPageSlotTotal(cache, 0);
-            fileHandle.appendPage(cache);
-            numberOfPages = fileHandle.getNumberOfPages();
+            remainSpace = this->countRemainSpace(cache, PAGE_SIZE - 2 * sizeof(short), newSize, true);
+            numberOfPages++;
             pageNum = numberOfPages - 1;
-            fileHandle.readPage(pageNum, cache);
         }
         short slotNum = this->findFreeSlot(cache);
         short slotTotal = this->getPageSlotTotal(cache);
         short insertPtr = this->getInsertPtr(cache);
         this->copyRecord(cache, insertPtr, fieldCount,
                          data, offsetTable, newSize);
+        this->setPageFreeSpace(cache, remainSpace);
         if (slotNum == slotTotal) {
             this->setPageSlotTotal(cache, slotTotal + 1);
         }
-        this->setPageFreeSpace(cache, this->countRemainSpace(cache, this->getPageFreeSpace(cache),
-                                                             newSize, true));
         this->setRecordOffset(cache, insertPtr + newSize, slotNum);
         this->setRecordSize(cache, newSize, slotNum);
-        fileHandle.writePage(pageNum, cache);
+        fileHandle.appendPage(cache);
         free(cache);
         insertPtr = recordOffset - recordSize;
         memcpy((char *) page + insertPtr, &pageNum, sizeof(unsigned));

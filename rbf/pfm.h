@@ -57,7 +57,7 @@ public:
     RC closeFile();
 private:
     FILE *fpt;
-    bool fileHandleOccupied();
+    bool fileHandleEmpty();
 };
 
 #endif
