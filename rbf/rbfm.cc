@@ -426,7 +426,7 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         memset(cache, '\0', PAGE_SIZE);
         unsigned pageNum = numberOfPages;
         if (numberOfPages > 1) {
-            for (pageNum = numberOfPages - 1; pageNum >= 0, pageNum--;) {
+            for (pageNum = numberOfPages - 1; pageNum >= 0; pageNum--) {
                 if (pageNum == id->pageNum) continue;
                 fileHandle.readPage(pageNum, cache);
                 remainSpace = this->countRemainSpace(cache, this->getPageFreeSpace(cache), newSize, true);
@@ -525,7 +525,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
 RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                 const string &conditionAttribute, const CompOp compOp, const void *value,
                                 const vector<string> &attributeNames, RBFM_ScanIterator &rbfm_ScanIterator) {
-    rbfm_ScanIterator.fileHandle = fileHandle;
+//    rbfm_ScanIterator.fileHandle = fileHandle;
     rbfm_ScanIterator.compOp = compOp;
     rbfm_ScanIterator.value = value;
     rbfm_ScanIterator.recordDescriptor = recordDescriptor;

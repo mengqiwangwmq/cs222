@@ -86,7 +86,7 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     vector<string> attributeNames;
     prepareTablesAttributeNames(attributeNames);
 
-    RBFM_ScanIterator scanIterator = RBFM_ScanIterator();
+    RBFM_ScanIterator scanIterator = new RBFM_ScanIterator();
     string conditionalAttribute = "table-name";
     int length = tableName.size();
     char *value = (char *)malloc(length + sizeof(int));

@@ -7,10 +7,12 @@ typedef unsigned char byte;
 
 #define PAGE_SIZE 4096
 
+#include <sys/stat.h>
 #include <string>
 #include <cstring>
 #include <climits>
 #include <fstream>
+#include <iostream>
 
 using namespace std;
 
@@ -53,11 +55,10 @@ public:
     RC collectCounterValues(unsigned &readPageCount, unsigned &writePageCount,
                             unsigned &appendPageCount);                 // Put current counter values into variables
     RC updateCounterValues();                                           // Update current counter values into hidden page
-    RC setFile(const std::string &fileName);
+    RC openFile(const std::string &fileName);
     RC closeFile();
 private:
-    FILE *fpt;
-    bool fileHandleEmpty();
+    fstream fs;
 };
 
 #endif
