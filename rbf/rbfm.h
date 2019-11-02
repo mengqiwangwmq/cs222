@@ -75,7 +75,7 @@ public:
 
     int cPage;
     int cSlot;
-    FileHandle fileHandle;
+    FileHandle *fileHandle;
     std::vector<Attribute> recordDescriptor;
     int conditionAttributePosition;
     CompOp compOp;

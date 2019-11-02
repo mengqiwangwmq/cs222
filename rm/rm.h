@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <iostream>
 
 #include "../rbf/rbfm.h"
 

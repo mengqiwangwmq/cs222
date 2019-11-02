@@ -525,7 +525,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
 RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
                                 const string &conditionAttribute, const CompOp compOp, const void *value,
                                 const vector<string> &attributeNames, RBFM_ScanIterator &rbfm_ScanIterator) {
-//    rbfm_ScanIterator.fileHandle = fileHandle;
+    rbfm_ScanIterator.fileHandle = &fileHandle;
     rbfm_ScanIterator.compOp = compOp;
     rbfm_ScanIterator.value = value;
     rbfm_ScanIterator.recordDescriptor = recordDescriptor;
@@ -570,20 +570,20 @@ RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attrib
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
     RecordBasedFileManager &rbfm = RecordBasedFileManager::instance();
     void *page = malloc(PAGE_SIZE);
-    fileHandle.readPage(cPage, page);
+    fileHandle->readPage(cPage, page);
     short slotNum = rbfm.getPageSlotTotal(page);
     while (true) {
         cSlot++;
         if (cSlot > slotNum - 1) {
             cPage++;
             cSlot = 0;
-            if (cPage > fileHandle.getNumberOfPages() - 1) {
+            if(cPage > fileHandle->getNumberOfPages() - 1) {
                 free(page);
                 return RBFM_EOF;
             } else {
                 free(page);
-                page = (char *) malloc(PAGE_SIZE);
-                fileHandle.readPage(cPage, page);
+                page = (char *)malloc(PAGE_SIZE);
+                fileHandle->readPage(cPage, page);
                 slotNum = rbfm.getPageSlotTotal(page);
             }
         }
@@ -608,10 +608,10 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 short tPage;
                 short tSlot;
                 startOffset = offset - sizeof(int) - sizeof(short);
-                memcpy(&tPage, (char *) page + startOffset, sizeof(int));
-                memcpy(&tSlot, (char *) page + startOffset + sizeof(int), sizeof(short));
-                auto *tPageData = (char *) malloc(PAGE_SIZE);
-                fileHandle.readPage(tPage, tPageData);
+                memcpy(&tPage, (char *)page + startOffset, sizeof(int));
+                memcpy(&tSlot, (char *)page + startOffset + sizeof(int), sizeof(short));
+                auto *tPageData = (char *)malloc(PAGE_SIZE);
+                fileHandle->readPage(tPage, tPageData);
                 offset = rbfm.getRecordOffset(tPageData, tSlot);
                 if (offset == -1) {
                     valid = false;
@@ -643,6 +643,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                     nullBit = nullFlags[i / 8] & (unsigned) 1 << (unsigned) (7 - i % 8);
                     if (!nullBit) {
                         offsetTableIndex = i;
+                        free(nullFlags);
                         break;
                     }
                 }
@@ -682,6 +683,8 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 
                     if (length != valueToSearchLength) {
                         satisfied = false;
+                        free(valueToCheck);
+                        free(valueToSearch);
                         continue;
                     }
 
@@ -871,7 +874,7 @@ RC RBFM_ScanIterator::close() {
 
     attributeNames.clear();
     recordDescriptor.clear();
-    free(attributePositions);
+    delete attributePositions;
     return 0;
 }
 
