@@ -26,7 +26,7 @@ typedef enum {
 typedef unsigned AttrLength;
 
 struct Attribute {
-    std::string name;     // attribute name
+    string name;     // attribute name
     AttrType type;     // attribute type
     AttrLength length; // attribute length
 };
@@ -62,37 +62,40 @@ class RBFM_ScanIterator {
 public:
     RBFM_ScanIterator();
 
-    ~RBFM_ScanIterator() = default;;
+    ~RBFM_ScanIterator() = default;
+
+    void init(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor,
+              const CompOp compOp, const void *value, const vector<string> &attrNames);
 
     // Never keep the results in the memory. When getNextRecord() is called,
     // a satisfying record needs to be fetched from the file.
     // "data" follows the same format as RecordBasedFileManager::insertRecord().
     RC getNextRecord(RID &rid, void *data);
 
-    bool checkSatisfied(bool &satisfied, CompOp &comOp, void *value, const void *searchValue, int length, AttrType type);
+    bool checkSatisfied(void *checkValue);
 
     RC close();
 
-    int cPage;
-    int cSlot;
+    unsigned pageNum;
+    short slotNum;
     FileHandle *fileHandle;
-    std::vector<Attribute> recordDescriptor;
-    int conditionAttributePosition;
+    vector<Attribute> recordDescriptor;
     CompOp compOp;
     const void *value;
-    int *attributePositions;
-    std::vector<std::string> attributeNames;
+    vector<short> attrIdx;
+    vector<string> attrNames;
+    short condAttrIdx;
 };
 
 class RecordBasedFileManager {
 public:
     static RecordBasedFileManager &instance();                          // Access to the _rbf_manager instance
 
-    RC createFile(const std::string &fileName);                         // Create a new record-based file
+    RC createFile(const string &fileName);                         // Create a new record-based file
 
-    RC destroyFile(const std::string &fileName);                        // Destroy a record-based file
+    RC destroyFile(const string &fileName);                        // Destroy a record-based file
 
-    RC openFile(const std::string &fileName, FileHandle &fileHandle);   // Open a record-based file
+    RC openFile(const string &fileName, FileHandle &fileHandle);   // Open a record-based file
 
     RC closeFile(FileHandle &fileHandle);                               // Close a record-based file
 
@@ -111,7 +114,7 @@ public:
     //  !!! The same format is used for updateRecord(), the returned data of readRecord(), and readAttribute().
     // For example, refer to the Q8 of Project 1 wiki page.
 
-    static short getNullFlagSize(int fieldCount);
+    short getNullFlagSize(int fieldCount);
 
     static short getPageSlotTotal(const void *page);
 
@@ -122,12 +125,14 @@ public:
     static void setPageFreeSpace(const void *page, short space);
 
     static short getRecordOffset(const void *page, short slotNum);
-    
+
     static void setRecordOffset(const void *page, short offset, short slotNum);
 
-    static short getRecordSize(const void *page, unsigned slotNum);
+    static short getRecordSize(const void *page, short slotNum);
 
-    static void setRecordSize(const void *page, short recordSize, unsigned slotNum);
+    static void setRecordSize(const void *page, short recordSize, short slotNum);
+
+    void getAttributeOffset(const void *page, short pagePtr, short attrIdx, short &offset, short &prevOffset);
 
     short getInsertPtr(const void *page);
 
@@ -135,49 +140,51 @@ public:
 
     short findFreeSlot(const void *page);
 
-    short parseRecord(const std::vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
+    short parseRecord(const vector<Attribute> &recordDescriptor, const void *data, const void *offsetTable);
 
-    RC copyRecord(const void *page, short insertPtr, int fieldCount, const void *data, const void *offsetTable, short recordSize);
+    RC copyRecord(const void *page, short insertPtr, int fieldCount, const void *data, const void *offsetTable,
+                  short recordSize);
 
     // Insert a record into a file
-    RC insertRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data, RID &rid);
+    RC insertRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data, RID &rid);
 
     // Read a record identified by the given rid.
-    RC readRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid, void *data);
+    RC readRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid, void *data);
 
-    void locateRecord(FileHandle &fileHandle, void *page, short *recordOffset, short *recordSize, RID* &id);
+    void locateRecord(FileHandle &fileHandle, void *page, short &recordOffset, short &recordSize, RID *&id);
 
     void shiftRecord(const void *page, short recordOffset, short distance);
+
     // Print the record that is passed to this utility method.
     // This method will be mainly used for debugging/testing.
     // The format is as follows:
     // field1-name: field1-value  field2-name: field2-value ... \n
     // (e.g., age: 24  height: 6.1  salary: 9000
     //        age: NULL  height: 7.5  salary: 7500)
-    RC printRecord(const std::vector<Attribute> &recordDescriptor, const void *data);
+    RC printRecord(const vector<Attribute> &recordDescriptor, const void *data);
 
     /*****************************************************************************************************
     * IMPORTANT, PLEASE READ: All methods below this comment (other than the constructor and destructor) *
     * are NOT required to be implemented for Project 1                                                   *
     *****************************************************************************************************/
     // Delete a record identified by the given rid.
-    RC deleteRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid);
+    RC deleteRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid);
 
     // Assume the RID does not change after an update
-    RC updateRecord(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const void *data,
+    RC updateRecord(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const void *data,
                     const RID &rid);
 
     // Read an attribute given its name and the rid.
-    RC readAttribute(FileHandle &fileHandle, const std::vector<Attribute> &recordDescriptor, const RID &rid,
-                     const std::string &attributeName, void *data);
+    RC readAttribute(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor, const RID &rid,
+                     const string &attributeName, void *data);
 
     // Scan returns an iterator to allow the caller to go through the results one by one.
     RC scan(FileHandle &fileHandle,
-            const std::vector<Attribute> &recordDescriptor,
-            const std::string &conditionAttribute,
+            const vector<Attribute> &recordDescriptor,
+            const string &conditionAttribute,
             const CompOp compOp,                  // comparision type such as "<" and "="
             const void *value,                    // used in the comparison
-            const std::vector<std::string> &attributeNames, // a list of projected attributes
+            const vector<string> &attrNames, // a list of projected attributes
             RBFM_ScanIterator &rbfm_ScanIterator);
 
 protected:

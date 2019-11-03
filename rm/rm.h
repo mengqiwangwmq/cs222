@@ -10,6 +10,8 @@
 
 # define RM_EOF (-1)  // end of a scan operator
 
+using namespace std;
+
 // RM_ScanIterator is an iterator to go through tuples
 class RM_ScanIterator {
 public:
@@ -71,20 +73,30 @@ public:
 
     bool isSystemTable(const string &tableName);
 
-    RC insertTablesRecord(const int table_id, const std::string &table_name, const std::string &file_name, const int systemTable);
-    RC insertTableColumnsRecords(const int table_id, std::vector<Attribute> descriptor);
-    RC insertColumnsRecord(FileHandle fileHandle, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position);
+    void prepareTablesDescriptor(vector<Attribute> &tablesDescriptor);
+
+    void prepareColumnsDescriptor(vector<Attribute> &columnsDescriptor);
+
+    void prepareTablesRecord(int fieldCount, void *data, int table_id, const string &table_name,
+                             const string &file_name, int systemFlag);
+
+    void prepareColumnsRecord(int fieldCount, void *data, int table_id, Attribute &attr, int attr_pos);
+
+    RC insertTablesRecord(const vector<Attribute> &tablesDescriptor, int table_id,
+                          const string &table_name, const string &file_name,
+                          int systemFlag);
+
+    RC insertColumnsRecord(const vector<Attribute> &columnsDescriptor, int table_id,
+                           const vector<Attribute> &targetDescriptor);
 
     void prepareTablesAttributeNames(vector<string> &attributeNames);
+
     void prepareColumnsAttributeNames(vector<string> &attributeNames);
 
-    void prepareTablesDescriptor(std::vector<Attribute> &tablesDescriptor);
-    void prepareColumnsDescriptor(std::vector<Attribute> &columnsDescriptor);
-    void prepareTablesRecord(int tablesDescriptorSize, void *data, const int table_id, const std::string &table_name, const std::string &file_name, const int systemTable);
-    void prepareColumnsRecord(int columnsDescriptorSize, void *data, const int table_id, const std::string &column_name, const int column_type, const int column_length, const int column_position);
+    int generateTableId();
 
-    int generateNedtTableId();
-    RC getTableId(const std::string &tableName, int &tableId);
+    RC getTableId(const string &tableName, int &tableId);
+
 protected:
     RelationManager();                                                  // Prevent construction
     ~RelationManager();                                                 // Prevent unwanted destruction
