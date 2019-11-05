@@ -108,20 +108,20 @@ void RelationManager::prepareTablesRecord(int fieldCount, void *data, int table_
     char *nullFlags = (char *) malloc(nullFlagSize);
     memset(nullFlags, '\0', nullFlagSize);
     memcpy((char *) data, nullFlags, nullFlagSize);
-    int offset = nullFlagSize;
-    memcpy((char *) data + offset, &table_id, sizeof(int));
-    offset += sizeof(int);
+    int dataPtr = nullFlagSize;
+    memcpy((char *) data + dataPtr, &table_id, sizeof(int));
+    dataPtr += sizeof(int);
     int length = table_name.size();
-    memcpy((char *) data + offset, &length, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *) data + offset, table_name.c_str(), length);
-    offset += length;
+    memcpy((char *) data + dataPtr, &length, sizeof(int));
+    dataPtr += sizeof(int);
+    memcpy((char *) data + dataPtr, table_name.c_str(), length);
+    dataPtr += length;
     length = file_name.size();
-    memcpy((char *) data + offset, &length, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *) data + offset, file_name.c_str(), length);
-    offset += length;
-    memcpy((char *) data + offset, &systemFlag, sizeof(int));
+    memcpy((char *) data + dataPtr, &length, sizeof(int));
+    dataPtr += sizeof(int);
+    memcpy((char *) data + dataPtr, file_name.c_str(), length);
+    dataPtr += length;
+    memcpy((char *) data + dataPtr, &systemFlag, sizeof(int));
     free(nullFlags);
 }
 
@@ -131,19 +131,19 @@ void RelationManager::prepareColumnsRecord(int fieldCount, void *data, int table
     memset(nullFlags, '\0', nullFlagSize);
     memcpy((char *) data, nullFlags, nullFlagSize);
     free(nullFlags);
-    int offset = nullFlagSize;
-    memcpy((char *) data + offset, &table_id, sizeof(int));
-    offset += sizeof(int);
+    int dataPtr = nullFlagSize;
+    memcpy((char *) data + dataPtr, &table_id, sizeof(int));
+    dataPtr += sizeof(int);
     int attr_nameLength = attr.name.size();
-    memcpy((char *) data + offset, &attr_nameLength, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *) data + offset, attr.name.c_str(), attr_nameLength);
-    offset += attr_nameLength;
-    memcpy((char *) data + offset, &attr.type, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *) data + offset, &attr.length, sizeof(int));
-    offset += sizeof(int);
-    memcpy((char *) data + offset, &attr_pos, sizeof(int));
+    memcpy((char *) data + dataPtr, &attr_nameLength, sizeof(int));
+    dataPtr += sizeof(int);
+    memcpy((char *) data + dataPtr, attr.name.c_str(), attr_nameLength);
+    dataPtr += attr_nameLength;
+    memcpy((char *) data + dataPtr, &attr.type, sizeof(int));
+    dataPtr += sizeof(int);
+    memcpy((char *) data + dataPtr, &attr.length, sizeof(int));
+    dataPtr += sizeof(int);
+    memcpy((char *) data + dataPtr, &attr_pos, sizeof(int));
 }
 
 RC RelationManager::insertTablesRecord(const vector<Attribute> &tablesDescriptor, int table_id,
@@ -242,9 +242,7 @@ RC RelationManager::createTable(const std::string &tableName, const std::vector<
 }
 
 RC RelationManager::deleteTable(const std::string &tableName) {
-    // Delete tuple in tables
     if (isSystemTable(tableName)) {
-        // TODO: Add -8, delete system table, as error code
         return -8;
     }
     FileHandle tablesFileHandle;
@@ -321,64 +319,47 @@ RC RelationManager::deleteTable(const std::string &tableName) {
 
 RC RelationManager::getAttributes(const string &tableName, std::vector<Attribute> &attrs) {
     int tableId;
-    getTableId(tableName, tableId);
+    RC rc = getTableId(tableName, tableId);
+    if (rc != 0) {
+        return -1;
+    }
 
     FileHandle fileHandle;
-    RC rc = _rbf_manager->openFile("Columns", fileHandle);
+    rc = _rbf_manager->openFile("Columns", fileHandle);
     if (rc != 0) {
         return -1;
     }
 
     vector<Attribute> columnsDescriptor;
     vector<string> attrNames;
+    attrNames.emplace_back("column-name");
+    attrNames.emplace_back("column-type");
+    attrNames.emplace_back("column-length");
     prepareColumnsDescriptor(columnsDescriptor);
-    attrNames.push_back("column-name");
-    attrNames.push_back("column-type");
-    attrNames.push_back("column-length");
     string conditionalAttribute = "table-id";
     CompOp compOp = EQ_OP;
-    auto *value = (char *) malloc(sizeof(int));
+    char *value = (char *) malloc(sizeof(int));
     memcpy(value, &tableId, sizeof(int));
     RBFM_ScanIterator scanIterator;
     _rbf_manager->scan(fileHandle, columnsDescriptor, conditionalAttribute, compOp, value, attrNames, scanIterator);
 
-    auto *data = (char *) malloc(PAGE_SIZE);
+    char *data = (char *) malloc(PAGE_SIZE);
     RID rid;
-    int offset;
+    int dataPtr;
+    vector<Attribute> projColumnDescritor(columnsDescriptor.cbegin() + 1, columnsDescriptor.cend());
     while (scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
-        vector<Attribute> projectedColumns;
-        Attribute attr;
-        attr.name = "column-name";
-        attr.type = TypeVarChar;
-        attr.length = 50;
-        projectedColumns.push_back(attr);
-        attr.name = "column-type";
-        attr.type = TypeInt;
-        attr.length = 4;
-        projectedColumns.push_back(attr);
-        attr.name = "column-length";
-        attr.type = TypeInt;
-        attr.length = 4;
-        projectedColumns.push_back(attr);
-
-//        _rbf_manager->printRecord(projectedColumns, data);
-
-        offset = ceil((double) projectedColumns.size() / CHAR_BIT);
+        dataPtr = this->_rbf_manager->getNullFlagSize(columnsDescriptor.size() - 1);
         Attribute returnedAttr;
         int length;
-        memcpy(&length, (char *) data + offset, sizeof(int));
-//        cout<<length<<endl;
-        offset += sizeof(int);
+        memcpy(&length, (char *) data + dataPtr, sizeof(int));
+        dataPtr += sizeof(int);
         char *name = (char *) malloc(length);
-        memcpy(name, (char *) data + offset, length);
+        memcpy(name, (char *) data + dataPtr, length);
         returnedAttr.name = string(name, length);
-//        cout<<returnedAttr.name<<endl;
-        offset += length;
-        memcpy(&returnedAttr.type, (char *) data + offset, sizeof(int));
-        offset += sizeof(int);
-//        cout<<returnedAttr.type<<endl;
-        memcpy(&returnedAttr.length, (char *) data + offset, sizeof(int));
-//        cout<<returnedAttr.length<<endl;
+        dataPtr += length;
+        memcpy(&returnedAttr.type, (char *) data + dataPtr, sizeof(int));
+        dataPtr += sizeof(int);
+        memcpy(&returnedAttr.length, (char *) data + dataPtr, sizeof(int));
         attrs.push_back(returnedAttr);
         free(name);
     }
@@ -386,7 +367,6 @@ RC RelationManager::getAttributes(const string &tableName, std::vector<Attribute
     free(data);
     free(value);
     scanIterator.close();
-
     return 0;
 }
 
