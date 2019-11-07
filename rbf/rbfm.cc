@@ -84,12 +84,12 @@ void RecordBasedFileManager::setRecordSize(const void *page, short recordSize, s
     memcpy((char *) page + ptr, &recordSize, sizeof(short));
 }
 
-void RecordBasedFileManager::getAttributeOffset(const void *page, short pagePtr,
+void RecordBasedFileManager::getAttributeOffset(const void *page, short pagePtr, int fieldCount, short nullFlagSize,
                                                 short attrIdx, short &offset, short &prevOffset) {
-    memcpy(&offset, (char *) page + pagePtr + attrIdx * sizeof(short), sizeof(short));
-    prevOffset = 0;
+    memcpy(&offset, (char *) page + pagePtr + nullFlagSize + attrIdx * sizeof(short), sizeof(short));
+    prevOffset = nullFlagSize + fieldCount * sizeof(short);
     if (attrIdx != 0) {
-        memcpy(&prevOffset, (char *) page + pagePtr + (attrIdx - 1) * sizeof(short), sizeof(short));
+        memcpy(&prevOffset, (char *) page + pagePtr + nullFlagSize + (attrIdx - 1) * sizeof(short), sizeof(short));
     }
 }
 
@@ -513,7 +513,7 @@ RC RecordBasedFileManager::readAttribute(FileHandle &fileHandle, const vector<At
     int nullFlagSize = this->getNullFlagSize(fieldCount);
     short pagePtr = recordOffset - recordSize;
     short offset, prevOffset;
-    this->getAttributeOffset(page, pagePtr + nullFlagSize, i, offset, prevOffset);
+    this->getAttributeOffset(page, pagePtr, fieldCount, nullFlagSize, i, offset, prevOffset);
     short sz = offset - prevOffset;
     bool nullBit;
     if (sz == 0) {
@@ -582,7 +582,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
     this->fileHandle->readPage(this->pageNum, page);
     short slotTotal = rbfm.getPageSlotTotal(page);
     RID *id = (RID *) malloc(sizeof(RID));
-    bool satisfied;
+    bool satisfied = false;
     while (true) {
         this->slotNum++;
         if (this->slotNum > slotTotal - 1) {
@@ -615,12 +615,12 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
             satisfied = true;
         } else {
             short offset, prevOffset;
-            rbfm.getAttributeOffset(page, pagePtr + nullFlagSize,
+            rbfm.getAttributeOffset(page, pagePtr, fieldCount, nullFlagSize,
                                     this->condAttrIdx, offset, prevOffset);
             short sz = offset - prevOffset;
             if (sz > 0) {
                 void *checkValue = malloc(sz);
-                memcpy((char *) checkValue, (char *) page + prevOffset, sz);
+                memcpy((char *) checkValue, (char *) page + pagePtr + prevOffset, sz);
                 satisfied = this->checkSatisfied(checkValue);
                 free(checkValue);
             } else {
@@ -631,11 +631,11 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
         if (satisfied) {
             int reNullFlagsSize = rbfm.getNullFlagSize(this->attrNames.size());
             unsigned char *reNullFlags = (unsigned char *) malloc(reNullFlagsSize);
-            memset(reNullFlags, '\0', reNullFlagsSize);
+            memset(reNullFlags, 0, reNullFlagsSize);
             short offset, prevOffset, sz;
             short dataPtr = reNullFlagsSize;
             for (int i = 0; i < attrNames.size(); i++) {
-                rbfm.getAttributeOffset(page, pagePtr + nullFlagSize,
+                rbfm.getAttributeOffset(page, pagePtr, fieldCount, nullFlagSize,
                                         this->attrIdx[i], offset, prevOffset);
                 sz = offset - prevOffset;
                 if (sz > 0) {
@@ -668,15 +668,15 @@ bool RBFM_ScanIterator::checkSatisfied(void *checkValue) {
         memcpy(&v1, (char *) checkValue, sizeof(int));
         memcpy(&s1, (char *) this->value, sizeof(int));
     } else if (attr.type == TypeReal) {
-        memcpy(&v2, (char *) checkValue, sizeof(int));
+        memcpy(&v2, (char *) checkValue, sizeof(float));
         memcpy(&s2, (char *) this->value, sizeof(float));
     } else if (attr.type == TypeVarChar) {
         int length;
         memcpy(&length, (char *) checkValue, sizeof(int));
         char *vChar = (char *) malloc(length);
         char *sChar = (char *) malloc(length);
-        memcpy(vChar, (char *) checkValue, length);
-        memcpy(sChar, (char *) this->value, length);
+        memcpy(vChar, (char *) checkValue + sizeof(int), length);
+        memcpy(sChar, (char *) this->value + sizeof(int), length);
         v3 = string(vChar, length);
         s3 = string(sChar, length);
         free(vChar);

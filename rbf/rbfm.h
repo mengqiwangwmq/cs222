@@ -132,7 +132,8 @@ public:
 
     static void setRecordSize(const void *page, short recordSize, short slotNum);
 
-    void getAttributeOffset(const void *page, short pagePtr, short attrIdx, short &offset, short &prevOffset);
+    void getAttributeOffset(const void *page, short pagePtr, int fieldCount, short nullFlagSize,
+                            short attrIdx, short &offset, short &prevOffset);
 
     short getInsertPtr(const void *page);
 
