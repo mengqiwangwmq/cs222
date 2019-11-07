@@ -513,14 +513,7 @@ bool RelationManager::isSystemTable(const string &tableName) {
 }
 
 RC RelationManager::getTableId(const string &tableName, int &tableId) {
-    FileHandle fileHandle;
-    RC rc = _rbf_manager->openFile("Tables", fileHandle);
-    if (rc != 0) {
-        return rc;
-    }
-    vector<Attribute> tablesDescriptor;
     vector<string> attrNames;
-    prepareTablesDescriptor(tablesDescriptor);
     attrNames.emplace_back("table-id");
     string condAttr = "table-name";
     int length = tableName.size();
@@ -528,18 +521,17 @@ RC RelationManager::getTableId(const string &tableName, int &tableId) {
     memcpy(value, &length, sizeof(int));
     memcpy(value + sizeof(int), tableName.c_str(), length);
     CompOp compOp = EQ_OP;
-    RBFM_ScanIterator scanIterator;
+    RM_ScanIterator rmScanIterator;
 
-    _rbf_manager->scan(fileHandle, tablesDescriptor, condAttr, compOp, value, attrNames, scanIterator);
+    this->scan(tableName, condAttr, compOp, value, attrNames, rmScanIterator);
 
     char *data = (char *) malloc(PAGE_SIZE);
     RID rid;
-    if (scanIterator.getNextRecord(rid, data) != RBFM_EOF) {
+    if (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
         memcpy(&tableId, (char *) data + sizeof(char), sizeof(int));
     }
 
-    scanIterator.close();
-    _rbf_manager->closeFile(fileHandle);
+    rmScanIterator.close();
     free(data);
     free(value);
     return 0;
@@ -566,7 +558,7 @@ void RelationManager::prepareColumnsAttributeNames(vector<string> &attributeName
 }
 
 RC RM_ScanIterator::getNextTuple(RID &rid, void *data) {
-    RC rc = scanIterator.getNextRecord(rid, data);
+    RC rc = this->scanIterator.getNextRecord(rid, data);
     if (rc == RBFM_EOF) {
         return RM_EOF;
     }
@@ -574,8 +566,8 @@ RC RM_ScanIterator::getNextTuple(RID &rid, void *data) {
 }
 
 RC RM_ScanIterator::close() {
-    scanIterator.close();
-    fileHandle.closeFile();
+    this->scanIterator.close();
+    this->fileHandle.closeFile();
     return 0;
 }
 
