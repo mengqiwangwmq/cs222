@@ -1,6 +1,21 @@
 #include <algorithm>
+#include <random>
 #include "ix.h"
 #include "ix_test_util.h"
+
+RC closeWithFail(const string &indexFileName1, const string &indexFileName2, IXFileHandle &ixFileHandle1,
+                 IXFileHandle &ixFileHandle2, IX_ScanIterator &ix_ScanIterator1, IX_ScanIterator &ix_ScanIterator2) {
+    ix_ScanIterator1.close();
+    ix_ScanIterator2.close();
+
+    indexManager.closeFile(ixFileHandle1);
+    indexManager.closeFile(ixFileHandle2);
+
+    indexManager.destroyFile(indexFileName1);
+    indexManager.destroyFile(indexFileName2);
+
+    return fail;
+}
 
 int testCase_p2(const std::string &indexFileName1, const std::string &indexFileName2, const Attribute &attribute) {
 
@@ -48,7 +63,7 @@ int testCase_p2(const std::string &indexFileName1, const std::string &indexFileN
     }
 
     // Randomly shuffle the entries
-    std::random_shuffle(A, A + numOfTuples);
+    std::shuffle(A, A + numOfTuples, std::mt19937(std::random_device()()));
 
     // Insert entries
     for (int i = 0; i < numOfTuples; i++) {
@@ -78,7 +93,8 @@ int testCase_p2(const std::string &indexFileName1, const std::string &indexFileN
         if (ix_ScanIterator2.getNextEntry(rid2, &key2) != success
             || rid.pageNum != rid2.pageNum) {
             std::cerr << "Wrong entries output...failure" << std::endl;
-            goto error_close_scan;
+            return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                                 ix_ScanIterator2);
         }
 
         // delete entry
@@ -92,7 +108,9 @@ int testCase_p2(const std::string &indexFileName1, const std::string &indexFileN
     }
     if (count != 5001) {
         std::cerr << count << " - Wrong entries output...failure" << std::endl;
-        goto error_close_scan;
+        return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                             ix_ScanIterator2);
+
     }
 
     // close scan
@@ -135,17 +153,20 @@ int testCase_p2(const std::string &indexFileName1, const std::string &indexFileN
     while (ix_ScanIterator1.getNextEntry(rid, &key) == success) {
         if (ix_ScanIterator2.getNextEntry(rid2, &key) != success) {
             std::cerr << "Wrong entries output...failure" << std::endl;
-            goto error_close_scan;
+            return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                                 ix_ScanIterator2);
         }
         if (rid.pageNum > 20000 && B[rid.pageNum - 20001] > 35000) {
             std::cerr << "Wrong entries output...failure" << std::endl;
-            goto error_close_scan;
+            return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                                 ix_ScanIterator2);
         }
         count++;
     }
     if (count != 30000) {
         std::cerr << count << " - Wrong entries output...failure" << std::endl;
-        goto error_close_scan;
+        return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                             ix_ScanIterator2);
     }
 
     //close scan
@@ -171,18 +192,6 @@ int testCase_p2(const std::string &indexFileName1, const std::string &indexFileN
     assert(rc == success && "indexManager::destroyFile() should not fail.");
 
     return success;
-
-    error_close_scan: //close scan
-    ix_ScanIterator1.close();
-    ix_ScanIterator2.close();
-
-    indexManager.closeFile(ixFileHandle1);
-    indexManager.closeFile(ixFileHandle2);
-
-    indexManager.destroyFile(indexFileName1);
-    indexManager.destroyFile(indexFileName2);
-
-    return fail;
 }
 
 int main() {

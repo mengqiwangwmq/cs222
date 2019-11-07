@@ -1,6 +1,20 @@
 #include "ix.h"
 #include "ix_test_util.h"
 
+RC closeWithFail(const string &indexFileName1, const string &indexFileName2, IXFileHandle &ixFileHandle1,
+                 IXFileHandle &ixFileHandle2, IX_ScanIterator &ix_ScanIterator1, IX_ScanIterator &ix_ScanIterator2) {
+    ix_ScanIterator1.close();
+    ix_ScanIterator2.close();
+
+    indexManager.closeFile(ixFileHandle1);
+    indexManager.closeFile(ixFileHandle2);
+
+    indexManager.destroyFile(indexFileName1);
+    indexManager.destroyFile(indexFileName2);
+
+    return fail;
+}
+
 int testCase_p1(const std::string &indexFileName1, const std::string &indexFileName2, const Attribute &attribute) {
     // Check whether multiple indexes can be used at the same time.
     std::cerr << std::endl << "***** In IX Test Private Case 1 *****" << std::endl;
@@ -82,11 +96,13 @@ int testCase_p1(const std::string &indexFileName1, const std::string &indexFileN
 
         if (ix_ScanIterator2.getNextEntry(rid2, &key2) != success) {
             std::cerr << "Wrong entries output...failure" << std::endl;
-            goto error_close_scan;
+            return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                                 ix_ScanIterator2);
         }
         if (rid.pageNum != rid2.pageNum) {
             std::cerr << "Wrong entries output...failure" << std::endl;
-            goto error_close_scan;
+            return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                                 ix_ScanIterator2);
         }
         if (rid.pageNum % 1000 == 0) {
             std::cerr << returnedCount << " - returned entries: " << rid.pageNum << " " << rid.slotNum << std::endl;
@@ -96,7 +112,9 @@ int testCase_p1(const std::string &indexFileName1, const std::string &indexFileN
 
     if (inRidPageNumSum != outRidPageNumSum) {
         std::cerr << "Wrong entries output...failure" << std::endl;
-        goto error_close_scan;
+        return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2, ix_ScanIterator1,
+                             ix_ScanIterator2);
+
     }
 
     // Close Scan
@@ -123,18 +141,6 @@ int testCase_p1(const std::string &indexFileName1, const std::string &indexFileN
     assert(rc == success && "indexManager::destroyFile() should not fail.");
 
     return success;
-
-    error_close_scan: //close scan
-    ix_ScanIterator1.close();
-    ix_ScanIterator2.close();
-
-    indexManager.closeFile(ixFileHandle1);
-    indexManager.closeFile(ixFileHandle2);
-
-    indexManager.destroyFile(indexFileName1);
-    indexManager.destroyFile(indexFileName2);
-
-    return fail;
 }
 
 int main() {

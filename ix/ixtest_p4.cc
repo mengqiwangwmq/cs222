@@ -2,6 +2,16 @@
 #include "ix.h"
 #include "ix_test_util.h"
 
+RC closeWithFail(const string &indexFileName1, const string &indexFileName2, IXFileHandle &ixFileHandle1,
+                 IXFileHandle &ixFileHandle2) {
+    indexManager.closeFile(ixFileHandle1);
+    indexManager.closeFile(ixFileHandle2);
+    indexManager.destroyFile(indexFileName1);
+    indexManager.destroyFile(indexFileName2);
+
+    return fail;
+}
+
 int testCase_p4(const std::string &indexFileName1, const Attribute &attribute1, const std::string &indexFileName2,
                 const Attribute &attribute2) {
     // Checks whether varchar key is handled properly.
@@ -67,13 +77,14 @@ int testCase_p4(const std::string &indexFileName1, const Attribute &attribute1, 
 
     if (writePage1 < 1) {
         std::cerr << "Did not use disk at all. Test failed." << std::endl;
-        goto error_close_index;
+        return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2);
+
     }
 
     // Actually, there should be no difference.
     if (writePage2 + appendPage2 - writePage1 - appendPage1 > 10) {
         std::cerr << "Failed to handle space nicely for VarChar keys..." << std::endl;
-        goto error_close_index;
+        return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2);
     }
 
     *(int *) lowKey = 5;
@@ -92,18 +103,13 @@ int testCase_p4(const std::string &indexFileName1, const Attribute &attribute1, 
     while (ix_ScanIterator1.getNextEntry(rid, &key) != IX_EOF) {
         if (ix_ScanIterator2.getNextEntry(rid, &key) != success) {
             std::cerr << "Wrong entries output...failure" << std::endl;
-            goto error_close_index;
+            return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2);
         }
         count++;
     }
     if (count != 100) {
         std::cerr << "Wrong output count! expected: 100, actual: " << count << " ...Failure" << std::endl;
-        indexManager.closeFile(ixFileHandle1);
-        indexManager.closeFile(ixFileHandle2);
-        indexManager.destroyFile(indexFileName1);
-        indexManager.destroyFile(indexFileName2);
-
-        return fail;
+        return closeWithFail(indexFileName1, indexFileName2, ixFileHandle1, ixFileHandle2);
     }
 
 
