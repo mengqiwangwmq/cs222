@@ -9,6 +9,8 @@
 #include "../rbf/rbfm.h"
 
 # define RM_EOF (-1)  // end of a scan operator
+#define TABLES "Tables"
+#define COLUMNS "Columns"
 
 using namespace std;
 
@@ -93,9 +95,9 @@ public:
 
     void prepareColumnsAttributeNames(vector<string> &attributeNames);
 
-    int generateTableId();
+    int getTableId(const string &tableName);
 
-    RC getTableId(const string &tableName, int &tableId);
+    int getTableTotal();
 
 protected:
     RelationManager();                                                  // Prevent construction
