@@ -90,7 +90,7 @@ void RelationManager::prepareColumnsDescriptor(std::vector<Attribute> &columnsDe
     attr.length = (AttrLength) 4;
     columnsDescriptor.push_back(attr);
 
-    attr.name = "column-index";
+    attr.name = "column-position";
     attr.type = TypeInt;
     attr.length = (AttrLength) 4;
     columnsDescriptor.push_back(attr);
@@ -248,72 +248,54 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     if (this->isSystemTable(tableName)) {
         return -8;
     }
-    vector<Attribute> attrs;
-    this->prepareTablesDescriptor(attrs);
-    vector<string> attrNames;
-    this->prepareTablesAttributeNames(attrNames);
 
-    string condAttr = "table-name";
-    int length = tableName.size();
-    char *value = (char *) malloc(length + sizeof(int));
-    memcpy(value, &length, sizeof(int));
-    memcpy(value + sizeof(int), tableName.c_str(), length);
-    CompOp compOp = EQ_OP;
-
-    RM_ScanIterator rmScanIterator;
-    this->scan(TABLES, condAttr, compOp, value, attrNames, rmScanIterator);
-
-    string delTableName;
-    int delTableId;
     RID rid;
+    int delTableId = this->getTableId(tableName, rid);
+    vector<Attribute> tablesDescriptor;
+    this->prepareTablesDescriptor(tablesDescriptor);
+    vector<Attribute> columnsDescriptor;
+    this->prepareColumnsDescriptor(columnsDescriptor);
+    vector<string> attrNames;
+    prepareColumnsAttributeNames(attrNames);
+    string condAttr = "table-id";
+    CompOp compOp = EQ_OP;
+    char *value = (char *) malloc(sizeof(int));
+    memcpy(value, &delTableId, sizeof(int));
+    RM_ScanIterator rmScanIterator;
+    this->scan(COLUMNS, condAttr, compOp, value, attrNames, rmScanIterator);
+    vector<RID> targets;
     char *data = (char *) malloc(PAGE_SIZE);
-    bool found = false;
-    if (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
-        this->_rbf_manager->printRecord(attrs, data);
-        int dataPtr = sizeof(char);
-        memcpy(&delTableId, (char *) data + dataPtr, sizeof(int));
-        dataPtr += sizeof(int);
-        int length;
-        memcpy(&length, (char *) data + dataPtr, sizeof(int));
-        found = true;
+    while (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
+        targets.emplace_back(rid);
     }
+    free(data);
+    free(value);
     rmScanIterator.close();
-    if (!found) {
-        return -9;
-    }
+
     FileHandle tablesFileHandle;
     RC rc = this->_rbf_manager->openFile(TABLES, tablesFileHandle);
     if (rc != 0) {
         return -1;
     }
-    this->_rbf_manager->deleteRecord(tablesFileHandle, attrs, rid);
+    this->_rbf_manager->deleteRecord(tablesFileHandle, tablesDescriptor, rid);
     this->_rbf_manager->closeFile(tablesFileHandle);
-    this->_rbf_manager->destroyFile(delTableName);
+    this->_rbf_manager->destroyFile(tableName);
 
-    attrs.clear();
-    attrNames.clear();
-    free(value);
-    prepareColumnsDescriptor(attrs);
-    prepareColumnsAttributeNames(attrNames);
-    condAttr = "table-id";
-    value = (char *) malloc(sizeof(int));
-    memcpy(value, &delTableId, sizeof(int));
     FileHandle columnsFileHandle;
-    this->_rbf_manager->openFile(COLUMNS, columnsFileHandle);
-    this->scan(COLUMNS, condAttr, compOp, value, attrNames, rmScanIterator);
-    while (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
-        this->_rbf_manager->printRecord(attrs, data);
-        this->_rbf_manager->deleteRecord(columnsFileHandle, attrs, rid);
+    rc = this->_rbf_manager->openFile(COLUMNS, columnsFileHandle);
+    if (rc != 0) {
+        return rc;
     }
-    rmScanIterator.close();
+    for (int i = 0; i < targets.size(); i++) {
+        this->_rbf_manager->deleteRecord(columnsFileHandle, tablesDescriptor, targets[i]);
+    }
     this->_rbf_manager->closeFile(columnsFileHandle);
-    free(data);
-    free(value);
     return 0;
 }
 
 RC RelationManager::getAttributes(const string &tableName, std::vector<Attribute> &attrs) {
-    int tableId = getTableId(tableName);
+    RID rid;
+    int tableId = getTableId(tableName, rid);
 
     vector<Attribute> columnsDescriptor;
     vector<string> attrNames;
@@ -329,7 +311,6 @@ RC RelationManager::getAttributes(const string &tableName, std::vector<Attribute
     this->scan(COLUMNS, condAttr, compOp, value, attrNames, rmScanIterator);
 
     char *data = (char *) malloc(PAGE_SIZE);
-    RID rid;
     int dataPtr;
     while (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
         dataPtr = this->_rbf_manager->getNullFlagSize(attrNames.size());
@@ -497,7 +478,7 @@ bool RelationManager::isSystemTable(const string &tableName) {
     return false;
 }
 
-int RelationManager::getTableId(const string &tableName) {
+int RelationManager::getTableId(const string &tableName, RID &rid) {
     vector<string> attrNames;
     attrNames.emplace_back("table-id");
     string condAttr = "table-name";
@@ -511,7 +492,6 @@ int RelationManager::getTableId(const string &tableName) {
     this->scan(TABLES, condAttr, compOp, value, attrNames, rmScanIterator);
 
     char *data = (char *) malloc(PAGE_SIZE);
-    RID rid;
     int tableId = -1;
     if (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
         memcpy(&tableId, (char *) data + sizeof(char), sizeof(int));

@@ -95,7 +95,7 @@ public:
 
     void prepareColumnsAttributeNames(vector<string> &attributeNames);
 
-    int getTableId(const string &tableName);
+    int getTableId(const string &tableName, RID &rid);
 
     int getTableTotal();
 

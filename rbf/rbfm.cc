@@ -327,6 +327,7 @@ RC RecordBasedFileManager::deleteRecord(FileHandle &fileHandle, const vector<Att
     fileHandle.readPage(rid.pageNum, page);
     short slotTotal = this->getPageSlotTotal(page);
     if (rid.slotNum >= slotTotal) {
+        free(page);
         return -1;
     }
     short recordOffset, recordSize;
@@ -579,6 +580,7 @@ void RBFM_ScanIterator::init(FileHandle &fileHandle, const vector<Attribute> &re
 RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
     RecordBasedFileManager &rbfm = RecordBasedFileManager::instance();
     void *page = malloc(PAGE_SIZE);
+    memset(page, 0, PAGE_SIZE);
     this->fileHandle->readPage(this->pageNum, page);
     short slotTotal = rbfm.getPageSlotTotal(page);
     RID *id = (RID *) malloc(sizeof(RID));
@@ -638,6 +640,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
                 rbfm.getAttributeOffset(page, pagePtr, fieldCount, nullFlagSize,
                                         this->attrIdx[i], offset, prevOffset);
                 sz = offset - prevOffset;
+
                 if (sz > 0) {
                     memcpy((char *) data + dataPtr, (char *) page + pagePtr + prevOffset, sz);
                     dataPtr += sz;
@@ -671,14 +674,16 @@ bool RBFM_ScanIterator::checkSatisfied(void *checkValue) {
         memcpy(&v2, (char *) checkValue, sizeof(float));
         memcpy(&s2, (char *) this->value, sizeof(float));
     } else if (attr.type == TypeVarChar) {
-        int length;
-        memcpy(&length, (char *) checkValue, sizeof(int));
-        char *vChar = (char *) malloc(length);
-        char *sChar = (char *) malloc(length);
-        memcpy(vChar, (char *) checkValue + sizeof(int), length);
-        memcpy(sChar, (char *) this->value + sizeof(int), length);
-        v3 = string(vChar, length);
-        s3 = string(sChar, length);
+        int checkLen;
+        memcpy(&checkLen, (char *) checkValue, sizeof(int));
+        int searchLen;
+        memcpy(&searchLen, (char *) this->value, sizeof(int));
+        char *vChar = (char *) malloc(checkLen);
+        char *sChar = (char *) malloc(searchLen);
+        memcpy(vChar, (char *) checkValue + sizeof(int), checkLen);
+        memcpy(sChar, (char *) this->value + sizeof(int), searchLen);
+        v3 = string(vChar, checkLen);
+        s3 = string(sChar, searchLen);
         free(vChar);
         free(sChar);
     }
