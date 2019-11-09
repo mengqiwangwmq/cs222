@@ -435,17 +435,20 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         char *cache = (char *) malloc(PAGE_SIZE);
         memset(cache, '\0', PAGE_SIZE);
         unsigned pageNum = numberOfPages;
+        bool needNewPage = true;
         if (numberOfPages > 1) {
-            for (pageNum = numberOfPages - 1; pageNum >= 0; pageNum--) {
-                if (pageNum == id->pageNum) continue;
+            for (int i = numberOfPages - 1; i >= 0; i--) {
+                if (i == id->pageNum) continue;
+                pageNum = i;
                 fileHandle.readPage(pageNum, cache);
                 remainSpace = this->countRemainSpace(cache, this->getPageFreeSpace(cache), newSize, true);
                 if (remainSpace >= 0) {
+                    needNewPage = false;
                     break;
                 }
             }
         }
-        if (pageNum == numberOfPages) {
+        if (needNewPage) {
             this->setPageFreeSpace(cache, PAGE_SIZE - 2 * sizeof(short));
             this->setPageSlotTotal(cache, 0);
             remainSpace = this->countRemainSpace(cache, PAGE_SIZE - 2 * sizeof(short), newSize, true);
@@ -463,7 +466,11 @@ RC RecordBasedFileManager::updateRecord(FileHandle &fileHandle, const vector<Att
         }
         this->setRecordOffset(cache, insertPtr + newSize, slotNum);
         this->setRecordSize(cache, newSize, slotNum);
-        fileHandle.appendPage(cache);
+        if (needNewPage) {
+            fileHandle.appendPage(cache);
+        } else {
+            fileHandle.writePage(pageNum, cache);
+        }
         free(cache);
         insertPtr = recordOffset - recordSize;
         memcpy((char *) page + insertPtr, &pageNum, sizeof(unsigned));
