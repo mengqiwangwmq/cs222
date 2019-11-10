@@ -603,6 +603,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
             } else {
                 this->fileHandle->readPage(this->pageNum, page);
                 slotTotal = rbfm.getPageSlotTotal(page);
+                this->slotNum = 0;
             }
         }
         rid.pageNum = this->pageNum;
@@ -610,6 +611,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 
         memcpy(id, &rid, sizeof(RID));
         short recordOffset, recordSize;
+        this->fileHandle->readPage(this->pageNum, page);
         rbfm.locateRecord(*this->fileHandle, page, recordOffset, recordSize, id);
         if (id == nullptr) {
             id = (RID *) malloc(sizeof(RID));
@@ -643,7 +645,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
             memset(reNullFlags, 0, reNullFlagsSize);
             short offset, prevOffset, sz;
             short dataPtr = reNullFlagsSize;
-            for (int i = 0; i < attrNames.size(); i++) {
+            for (int i = 0; i < this->attrNames.size(); i++) {
                 rbfm.getAttributeOffset(page, pagePtr, fieldCount, nullFlagSize,
                                         this->attrIdx[i], offset, prevOffset);
                 sz = offset - prevOffset;
