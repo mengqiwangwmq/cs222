@@ -35,6 +35,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         root->cPage = 0;
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page);
+        free(page);
         root->writeNodeToPage(ixFileHandle);
     } else {
         void *page = malloc(PAGE_SIZE);
@@ -404,13 +405,13 @@ RC Node::printRids(int indent) {
         if (this->attrType == TypeInt)
         {
             int value;
-            memcpy(&value, (char *)this->keys[i], sizeof(attribute->length));
+            memcpy(&value, (char *)this->keys[i], sizeof(int));
             printf("%d:", value);
         }
         else if (this->attrType == TypeReal)
         {
             float value;
-            memcpy(&value, (char *)this->keys[i], sizeof(attribute->length));
+            memcpy(&value, (char *)this->keys[i], sizeof(int));
             printf("%f:", value);
         }
         else if (this->attrType == TypeVarChar)
