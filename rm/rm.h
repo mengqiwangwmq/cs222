@@ -80,13 +80,12 @@ public:
     void prepareColumnsDescriptor(vector<Attribute> &columnsDescriptor);
 
     void prepareTablesRecord(int fieldCount, void *data, int table_id, const string &table_name,
-                             const string &file_name, int systemFlag);
+                             const string &file_name);
 
     void prepareColumnsRecord(int fieldCount, void *data, int table_id, Attribute &attr, int attr_pos);
 
     RC insertTablesRecord(const vector<Attribute> &tablesDescriptor, int table_id,
-                          const string &table_name, const string &file_name,
-                          int systemFlag);
+                          const string &table_name, const string &file_name);
 
     RC insertColumnsRecord(const vector<Attribute> &columnsDescriptor, int table_id,
                            const vector<Attribute> &targetDescriptor);

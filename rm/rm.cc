@@ -38,8 +38,8 @@ RC RelationManager::createCatalog() {
     this->prepareColumnsDescriptor(columnsDescriptor);
 
     // Tables table
-    this->insertTablesRecord(tablesDescriptor, 1, tables, tables, 1);
-    this->insertTablesRecord(tablesDescriptor, 2, columns, columns, 1);
+    this->insertTablesRecord(tablesDescriptor, 1, tables, tables);
+    this->insertTablesRecord(tablesDescriptor, 2, columns, columns);
     this->insertColumnsRecord(columnsDescriptor, 1, tablesDescriptor);
     this->insertColumnsRecord(columnsDescriptor, 2, columnsDescriptor);
     return 0;
@@ -60,11 +60,6 @@ void RelationManager::prepareTablesDescriptor(std::vector<Attribute> &tablesDesc
     attr.name = "file-name";
     attr.type = TypeVarChar;
     attr.length = (AttrLength) 50;
-    tablesDescriptor.push_back(attr);
-
-    attr.name = "system-flag";
-    attr.type = TypeInt;
-    attr.length = (AttrLength) 4;
     tablesDescriptor.push_back(attr);
 }
 
@@ -97,8 +92,7 @@ void RelationManager::prepareColumnsDescriptor(std::vector<Attribute> &columnsDe
 }
 
 void RelationManager::prepareTablesRecord(int fieldCount, void *data, int table_id,
-                                          const string &table_name, const string &file_name,
-                                          int systemFlag) {
+                                          const string &table_name, const string &file_name) {
     int nullFlagSize = this->_rbf_manager->getNullFlagSize(fieldCount);
     int dataPtr = 0;
     char *nullFlags = (char *) malloc(nullFlagSize);
@@ -117,8 +111,6 @@ void RelationManager::prepareTablesRecord(int fieldCount, void *data, int table_
     memcpy((char *) data + dataPtr, &length, sizeof(int));
     dataPtr += sizeof(int);
     memcpy((char *) data + dataPtr, file_name.c_str(), length);
-    dataPtr += length;
-    memcpy((char *) data + dataPtr, &systemFlag, sizeof(int));
 }
 
 void RelationManager::prepareColumnsRecord(int fieldCount, void *data, int table_id, Attribute &attr, int attr_pos) {
@@ -144,8 +136,7 @@ void RelationManager::prepareColumnsRecord(int fieldCount, void *data, int table
 }
 
 RC RelationManager::insertTablesRecord(const vector<Attribute> &tablesDescriptor, int table_id,
-                                       const string &table_name, const string &file_name,
-                                       int systemFlag) {
+                                       const string &table_name, const string &file_name) {
     RID rid;
     FileHandle fileHandle;
     RC rc = this->_rbf_manager->openFile(TABLES, fileHandle);
@@ -155,7 +146,7 @@ RC RelationManager::insertTablesRecord(const vector<Attribute> &tablesDescriptor
     char *cache = (char *) malloc(PAGE_SIZE);
     memset(cache, 0, PAGE_SIZE);
     this->prepareTablesRecord(tablesDescriptor.size(), cache, table_id,
-                              table_name, file_name, systemFlag);
+                              table_name, file_name);
     rc = this->_rbf_manager->insertRecord(fileHandle, tablesDescriptor, cache, rid);
     free(cache);
     if (rc != 0) {
@@ -199,7 +190,6 @@ void RelationManager::prepareTablesAttributeNames(vector<string> &attributeNames
     attributeNames.emplace_back("table-id");
     attributeNames.emplace_back("table-name");
     attributeNames.emplace_back("file-name");
-    attributeNames.emplace_back("system-flag");
 }
 
 void RelationManager::prepareColumnsAttributeNames(vector<string> &attributeNames) {
@@ -228,7 +218,6 @@ RC RelationManager::deleteCatalog() {
 }
 
 RC RelationManager::createTable(const std::string &tableName, const std::vector<Attribute> &attrs) {
-    cout << tableName << endl;
     RC rc = this->_rbf_manager->createFile(tableName);
     if (rc != 0) {
         return rc;
@@ -240,7 +229,7 @@ RC RelationManager::createTable(const std::string &tableName, const std::vector<
     prepareColumnsDescriptor(columnsDescriptor);
 
     int newTableId = this->getTableTotal() + 1;
-    this->insertTablesRecord(tablesDescriptor, newTableId, tableName, tableName, 0);
+    this->insertTablesRecord(tablesDescriptor, newTableId, tableName, tableName);
     this->insertColumnsRecord(columnsDescriptor, newTableId, attrs);
     return 0;
 }
