@@ -71,6 +71,10 @@ FileHandle::~FileHandle() {
     this->closeFile();
 }
 
+bool FileHandle::fileHandleOccupied() {
+    return fs.is_open();
+}
+
 RC FileHandle::openFile(const string &fileName) {
     if (!fileExist(fileName)) {
         return -1; //FileNotFoundException

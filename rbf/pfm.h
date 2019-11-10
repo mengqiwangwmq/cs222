@@ -57,6 +57,9 @@ public:
     RC updateCounterValues();                                           // Update current counter values into hidden page
     RC openFile(const std::string &fileName);
     RC closeFile();
+
+    bool fileHandleOccupied();
+
 private:
     fstream fs;
 };
