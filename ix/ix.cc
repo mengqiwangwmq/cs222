@@ -41,6 +41,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.readPage(0, page);
         Node *root = new Node(&attribute, page, &ixFileHandle);
+        free(page);
         root->cPage = 0;
         if(root->nodeType == RootOnly) {
             int pos;
