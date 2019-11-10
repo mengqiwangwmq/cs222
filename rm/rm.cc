@@ -228,6 +228,7 @@ RC RelationManager::deleteCatalog() {
 }
 
 RC RelationManager::createTable(const std::string &tableName, const std::vector<Attribute> &attrs) {
+    cout << tableName << endl;
     RC rc = this->_rbf_manager->createFile(tableName);
     if (rc != 0) {
         return rc;
@@ -250,39 +251,45 @@ RC RelationManager::deleteTable(const std::string &tableName) {
     }
 
     RID rid;
+    char *data = (char *) malloc(PAGE_SIZE);
     int delTableId = this->getTableId(tableName, rid);
     vector<Attribute> tablesDescriptor;
     this->prepareTablesDescriptor(tablesDescriptor);
-    vector<Attribute> columnsDescriptor;
-    this->prepareColumnsDescriptor(columnsDescriptor);
     vector<string> attrNames;
-    prepareColumnsAttributeNames(attrNames);
+    this->prepareTablesAttributeNames(attrNames);
     string condAttr = "table-id";
     CompOp compOp = EQ_OP;
     char *value = (char *) malloc(sizeof(int));
     memcpy(value, &delTableId, sizeof(int));
-    RM_ScanIterator rmScanIterator;
-    this->scan(COLUMNS, condAttr, compOp, value, attrNames, rmScanIterator);
+    RM_ScanIterator tablesIterator;
+    this->scan(TABLES, condAttr, compOp, value, attrNames, tablesIterator);
+    while (tablesIterator.getNextTuple(rid, data) != RBFM_EOF) {
+        FileHandle tablesFileHandle;
+        RC rc = this->_rbf_manager->openFile(TABLES, tablesFileHandle);
+        if (rc != 0) {
+            return -1;
+        }
+        this->_rbf_manager->deleteRecord(tablesFileHandle, tablesDescriptor, rid);
+        this->_rbf_manager->closeFile(tablesFileHandle);
+        this->_rbf_manager->destroyFile(tableName);
+    }
+    tablesIterator.close();
+
+    attrNames.clear();
+    vector<Attribute> columnsDescriptor;
+    this->prepareColumnsDescriptor(columnsDescriptor);
+    RM_ScanIterator columnsIterator;
+    this->scan(COLUMNS, condAttr, compOp, value, attrNames, columnsIterator);
     vector<RID> targets;
-    char *data = (char *) malloc(PAGE_SIZE);
-    while (rmScanIterator.getNextTuple(rid, data) != RBFM_EOF) {
+    while (columnsIterator.getNextTuple(rid, data) != RBFM_EOF) {
         targets.emplace_back(rid);
     }
     free(data);
     free(value);
-    rmScanIterator.close();
-
-    FileHandle tablesFileHandle;
-    RC rc = this->_rbf_manager->openFile(TABLES, tablesFileHandle);
-    if (rc != 0) {
-        return -1;
-    }
-    this->_rbf_manager->deleteRecord(tablesFileHandle, tablesDescriptor, rid);
-    this->_rbf_manager->closeFile(tablesFileHandle);
-    this->_rbf_manager->destroyFile(tableName);
+    columnsIterator.close();
 
     FileHandle columnsFileHandle;
-    rc = this->_rbf_manager->openFile(COLUMNS, columnsFileHandle);
+    RC rc = this->_rbf_manager->openFile(COLUMNS, columnsFileHandle);
     if (rc != 0) {
         return rc;
     }
