@@ -103,11 +103,12 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         ixFileHandle.fileHandle.appendPage(page);
         newLeaf->cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         free(page);
-        newLeaf->writeNodeToPage(ixFileHandle);
 
         newLeaf->next = node->next;
         node->next = newLeaf->cPage;
         newLeaf->previous = node->cPage;
+
+        newLeaf->writeNodeToPage(ixFileHandle);
 
         Node *parent = path[path.size()-2];
         int pos;
@@ -210,7 +211,7 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         newLeaf1->writeNodeToPage(ixFileHandle);
         newLeaf2->writeNodeToPage(ixFileHandle);
     }else if(node->nodeType == Root) {
-        int mid = node->keys.size();
+        int mid = node->keys.size()/2;
         Node *newInter1 = new Node(node->attribute);
         Node *newInter2 = new Node(node->attribute);
         newInter1->nodeType = Intermediate;
@@ -231,8 +232,8 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
                 newInter2->children.push_back(node->children[i]);
             }
         }
-        node->keys.erase(node->keys.begin(), node->keys.begin()+mid);
         node->keys.erase(node->keys.begin()+mid+1, node->keys.end());
+        node->keys.erase(node->keys.begin(), node->keys.begin()+mid);
         node->children.clear();
         void *page1 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page1);
@@ -400,7 +401,7 @@ RC Node::printKeys() {
 }
 
 RC Node::printRids(int indent) {
-    printf("%*s%s", indent, "\"keys\": [");
+    printf("%*s", indent, "\"keys\": [");
     for(int i = 0; i < this->pointers.size(); i ++) {
         printf("\"");
         if (this->attrType == TypeInt)
@@ -452,7 +453,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
     if(this->cPage > ixFileHandle->fileHandle.getNumberOfPages()-1) {
         return -1;
     }
-    if(this->node == NULL) {
+    if(this->node == nullptr) {
         void *page = (char *)malloc(PAGE_SIZE);
         this->ixFileHandle->fileHandle.readPage(this->cPage, page);
         this->node = new Node(this->attribute, page, this->ixFileHandle);
@@ -849,7 +850,8 @@ RC Node::deleteRecord(int pos, const RID &rid) {
 }
 
 RC Node::locateChildPos(int &pos, bool &exist, const void *value) {
-    for(int i = 0; i < this->keys.size(); i ++) {
+    int i;
+    for(i = 0; i < this->keys.size(); i ++) {
         if(isEqual(value, keys[i])) {
             pos = i+1;
             exist = true;
@@ -861,7 +863,7 @@ RC Node::locateChildPos(int &pos, bool &exist, const void *value) {
             return 0;
         }
     }
-    pos = this->keys.size();
+    pos = i;
     exist = false;
     return 0;
 }
