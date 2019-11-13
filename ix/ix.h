@@ -88,7 +88,7 @@ public:
     bool highKeyInclusive;
 
     IXFileHandle *ixFileHandle;
-    Node *node;
+    Node *node = nullptr;
     const Attribute *attribute;
 };
 

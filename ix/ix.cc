@@ -78,6 +78,10 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
                 split(path, ixFileHandle);
             } else {
                 leaf->writeNodeToPage(ixFileHandle);
+                for(int i = 0; i < path.size(); i ++) {
+                    delete path[i];
+                }
+                path.clear();
             }
         }
     }
@@ -261,6 +265,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
     void *page = malloc(PAGE_SIZE);
     ixFileHandle.fileHandle.readPage(0, page);
     Node node = Node(&attribute, page, &ixFileHandle);
+    free(page);
     node.cPage = 0;
     if(node.nodeType == RootOnly) {
         int pos;
@@ -290,6 +295,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         return -10;
     }
     RC rc = leaf->deleteRecord(pos, rid);
+    cout<<rc<<endl;
     if(rc != 0) {
         return rc;
     }
@@ -602,11 +608,13 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
             this->keys.push_back(value);
+            free(value);
         } else if(this->attrType == TypeReal) {
             void *value = malloc(attribute->length);
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
             this->keys.push_back(value);
+            free(value);
         } else if(this->attrType == TypeVarChar) {
             int length;
             memcpy(&length, (char *)page+offset, sizeof(int));
@@ -616,6 +624,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, (char *)page+offset, sizeof(length));
             offset += length;
             this->keys.push_back(value);
+            free(value);
         }
     }
 
@@ -873,7 +882,9 @@ bool Node::isEqual(const void *compValue, const void *compKey) {
         int value;
         int key;
         memcpy(&value, compValue, sizeof(int));
+        cout<<value<<endl;
         memcpy(&key, compKey, sizeof(int));
+        cout<<key<<endl;
         return value == key;
     } else if(this->attrType == TypeReal) {
         float value;
