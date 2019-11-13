@@ -413,7 +413,7 @@ RC Node::printRids(int indent) {
         if (this->attrType == TypeInt)
         {
             int value;
-            memcpy(&value, (char *)this->keys[i], sizeof(int));
+            memcpy(&value, this->keys[i], sizeof(int));
             printf("%d:", value);
         }
         else if (this->attrType == TypeReal)
@@ -608,13 +608,11 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
             this->keys.push_back(value);
-            free(value);
         } else if(this->attrType == TypeReal) {
             void *value = malloc(attribute->length);
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
             this->keys.push_back(value);
-            free(value);
         } else if(this->attrType == TypeVarChar) {
             int length;
             memcpy(&length, (char *)page+offset, sizeof(int));
@@ -624,7 +622,6 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, (char *)page+offset, sizeof(length));
             offset += length;
             this->keys.push_back(value);
-            free(value);
         }
     }
 
