@@ -25,45 +25,45 @@ RC IndexManager::closeFile(IXFileHandle &ixFileHandle) {
 
 RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attribute, const void *key, const RID &rid) {
     if(ixFileHandle.fileHandle.getNumberOfPages() == 0) {
-        Node *root = new Node(attribute);
-        root->nodeType = RootOnly;
+        Node root = Node(attribute);
+        root.nodeType = RootOnly;
         int pos = 0;
-        root->insertKey(pos, key);
+        root.insertKey(pos, key);
         vector<RID> rids;
         rids.push_back(rid);
-        root->pointers.push_back(rids);
-        root->cPage = 0;
+        root.pointers.push_back(rids);
+        root.cPage = 0;
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page);
         free(page);
-        root->writeNodeToPage(ixFileHandle);
+        root.writeNodeToPage(ixFileHandle);
     } else {
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.readPage(0, page);
-        Node *root = new Node(&attribute, page, &ixFileHandle);
+        Node root = Node(&attribute, page, &ixFileHandle);
         free(page);
-        root->cPage = 0;
-        if(root->nodeType == RootOnly) {
+        root.cPage = 0;
+        if(root.nodeType == RootOnly) {
             int pos;
             bool exist;
-            root->locateChildPos(pos, exist, key);
+            root.locateChildPos(pos, exist, key);
             if(!exist) {
-                root->insertKey(pos, key);
-                root->insertPointer(pos, exist, rid);
+                root.insertKey(pos, key);
+                root.insertPointer(pos, exist, rid);
             } else {
-                root->insertPointer(pos-1, exist, rid);
+                root.insertPointer(pos-1, exist, rid);
             }
             vector<Node*> path;
-            path.push_back(root);
+            path.push_back(&root);
 
-            if((!exist || root->keys.size() > 0) && root->getNodeSize() > PAGE_SIZE) {
+            if((!exist || root.keys.size() > 0) && root.getNodeSize() > PAGE_SIZE) {
                 split(path, ixFileHandle);
             } else {
-                root->writeNodeToPage(ixFileHandle);
+                root.writeNodeToPage(ixFileHandle);
             }
         } else {
             vector<Node *> path;
-            constructPathToLeaf(ixFileHandle, path, root, key, attribute);
+            constructPathToLeaf(ixFileHandle, path, &root, key, attribute);
             Node *leaf = path[path.size()-1];
             int pos;
             bool exist;
@@ -88,38 +88,38 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
     Node *node = path[path.size()-1];
     if(node->nodeType == Leaf) {
         int mid = node->keys.size()/2;
-        Node *newLeaf = new Node(node->attribute);
-        newLeaf->nodeType = Leaf;
+        Node newLeaf = Node(node->attribute);
+        newLeaf.nodeType = Leaf;
         // TODO: add overflow pages
         // newLeaf->overFlowPages = node->overFlowPages;
         for(int i = mid; i < node->keys.size(); i ++) {
-            newLeaf->keys.push_back(node->keys[i]);
-            newLeaf->pointers.push_back(node->pointers[i]);
+            newLeaf.keys.push_back(node->keys[i]);
+            newLeaf.pointers.push_back(node->pointers[i]);
         }
         node->keys.erase(node->keys.begin()+mid, node->keys.end());
         node->pointers.erase(node->pointers.begin()+mid, node->pointers.end());
 
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page);
-        newLeaf->cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
+        newLeaf.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         free(page);
 
-        newLeaf->next = node->next;
-        node->next = newLeaf->cPage;
-        newLeaf->previous = node->cPage;
+        newLeaf.next = node->next;
+        node->next = newLeaf.cPage;
+        newLeaf.previous = node->cPage;
 
-        newLeaf->writeNodeToPage(ixFileHandle);
+        newLeaf.writeNodeToPage(ixFileHandle);
 
         Node *parent = path[path.size()-2];
         int pos;
         bool exist;
-        parent->locateChildPos(pos, exist, newLeaf->keys[0]);
+        parent->locateChildPos(pos, exist, newLeaf.keys[0]);
         if(!exist) {
-            parent->insertKey(pos, newLeaf->keys[0]);
-            parent->insertChild(pos+1, newLeaf->cPage);
+            parent->insertKey(pos, newLeaf.keys[0]);
+            parent->insertChild(pos+1, newLeaf.cPage);
         } else {
             // pos + 1
-            parent->insertChild(pos, newLeaf->cPage);
+            parent->insertChild(pos, newLeaf.cPage);
         }
         node->writeNodeToPage(ixFileHandle);
         // Delete the toppest element
@@ -133,20 +133,20 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         }
     } else if(node->nodeType == Intermediate) {
         int mid = node->keys.size()/2;
-        Node *new_Intermediate = new Node(node->attribute);
-        new_Intermediate->nodeType = Intermediate;
+        Node new_Intermediate = Node(node->attribute);
+        new_Intermediate.nodeType = Intermediate;
         // Strictly less than when comes to intermediate node
         for(int i = mid+1; i < node->keys.size(); i ++) {
-            new_Intermediate->keys.push_back(node->keys[i]);
-            new_Intermediate->children.push_back(node->children[i]);
+            new_Intermediate.keys.push_back(node->keys[i]);
+            new_Intermediate.children.push_back(node->children[i]);
             if(i == node->keys.size()-1) {
-                new_Intermediate->children.push_back(node->children[i+1]);
+                new_Intermediate.children.push_back(node->children[i+1]);
             }
         }
 
         void *page = (char *)malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page);
-        new_Intermediate->cPage = ixFileHandle.fileHandle.getNumberOfPages()-1;
+        new_Intermediate.cPage = ixFileHandle.fileHandle.getNumberOfPages()-1;
         free(page);
 
         Node *parent = path[path.size()-2];
@@ -155,11 +155,11 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         parent->locateChildPos(pos, exist, node->keys[mid]);
         if(!exist) {
             parent->insertKey(pos, node->keys[mid]);
-            parent->insertChild(pos+1, new_Intermediate->cPage);
+            parent->insertChild(pos+1, new_Intermediate.cPage);
         } else {
-            parent->insertChild(pos, new_Intermediate->cPage);
+            parent->insertChild(pos, new_Intermediate.cPage);
         }
-        new_Intermediate->writeNodeToPage(ixFileHandle);
+        new_Intermediate.writeNodeToPage(ixFileHandle);
 
         node->keys.erase(node->keys.begin()+mid,node->keys.end());
         node->children.erase(node->children.begin()+mid+1, node->children.end());
@@ -176,19 +176,19 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         }
     } else if(node->nodeType == RootOnly) {
         int mid = node->keys.size()/2;
-        Node *newLeaf1 = new Node(node->attribute);
-        Node *newLeaf2 = new Node(node->attribute);
+        Node newLeaf1 = Node(node->attribute);
+        Node newLeaf2 = Node(node->attribute);
         node->nodeType = Root;
-        newLeaf1->nodeType = Leaf;
-        newLeaf2->nodeType = Leaf;
+        newLeaf1.nodeType = Leaf;
+        newLeaf2.nodeType = Leaf;
         for(int i = 0; i < node->keys.size(); i ++) {
             if(i < mid) {
-                newLeaf1->keys.push_back(node->keys[i]);
-                newLeaf1->pointers.push_back(node->pointers[i]);
+                newLeaf1.keys.push_back(node->keys[i]);
+                newLeaf1.pointers.push_back(node->pointers[i]);
             }
             if(i >= mid) {
-                newLeaf2->keys.push_back(node->keys[i]);
-                newLeaf2->pointers.push_back(node->pointers[i]);
+                newLeaf2.keys.push_back(node->keys[i]);
+                newLeaf2.pointers.push_back(node->pointers[i]);
             }
         }
         node->keys.erase(node->keys.begin() + mid+1,node->keys.begin() + node->keys.size());
@@ -196,40 +196,40 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         node->pointers.clear();
         void *page1 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page1);
-        newLeaf1->cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
+        newLeaf1.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         void *page2 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page2);
-        newLeaf2->cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
+        newLeaf2.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         free(page1);
         free(page2);
-        node->children.push_back(newLeaf1->cPage);
-        node->children.push_back(newLeaf2->cPage);
-        newLeaf1->next = newLeaf2->cPage;
-        newLeaf2->previous = newLeaf1->cPage;
+        node->children.push_back(newLeaf1.cPage);
+        node->children.push_back(newLeaf2.cPage);
+        newLeaf1.next = newLeaf2.cPage;
+        newLeaf2.previous = newLeaf1.cPage;
         // TODO: consider overflow page
         node->writeNodeToPage(ixFileHandle);
-        newLeaf1->writeNodeToPage(ixFileHandle);
-        newLeaf2->writeNodeToPage(ixFileHandle);
+        newLeaf1.writeNodeToPage(ixFileHandle);
+        newLeaf2.writeNodeToPage(ixFileHandle);
     }else if(node->nodeType == Root) {
         int mid = node->keys.size()/2;
-        Node *newInter1 = new Node(node->attribute);
-        Node *newInter2 = new Node(node->attribute);
-        newInter1->nodeType = Intermediate;
-        newInter2->nodeType = Intermediate;
+        Node newInter1 = Node(node->attribute);
+        Node newInter2 = Node(node->attribute);
+        newInter1.nodeType = Intermediate;
+        newInter2.nodeType = Intermediate;
         for(int i = 0; i < node->keys.size(); i ++) {
             if(i < mid) {
-                newInter1->keys.push_back(node->keys[i]);
+                newInter1.keys.push_back(node->keys[i]);
             }
             if(i > mid) {
-                newInter2->keys.push_back(node->keys[i]);
+                newInter2.keys.push_back(node->keys[i]);
             }
         }
         for(int i = 0; i < node->keys.size(); i ++) {
             if(i < mid+1) {
-                newInter1->children.push_back(node->children[i]);
+                newInter1.children.push_back(node->children[i]);
             }
             if(i > mid) {
-                newInter2->children.push_back(node->children[i]);
+                newInter2.children.push_back(node->children[i]);
             }
         }
         node->keys.erase(node->keys.begin()+mid+1, node->keys.end());
@@ -237,18 +237,18 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         node->children.clear();
         void *page1 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page1);
-        newInter1->cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
+        newInter1.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         void *page2 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page2);
-        newInter2->cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
+        newInter2.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         free(page1);
         free(page2);
-        node->children.push_back(newInter1->cPage);
-        node->children.push_back(newInter2->cPage);
+        node->children.push_back(newInter1.cPage);
+        node->children.push_back(newInter2.cPage);
         // TODO: consider overflow pages
         node->writeNodeToPage(ixFileHandle);
-        newInter1->writeNodeToPage(ixFileHandle);
-        newInter2->writeNodeToPage(ixFileHandle);
+        newInter1.writeNodeToPage(ixFileHandle);
+        newInter2.writeNodeToPage(ixFileHandle);
     }
     return 0;
 }
@@ -260,12 +260,12 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
 
     void *page = malloc(PAGE_SIZE);
     ixFileHandle.fileHandle.readPage(0, page);
-    Node *node = new Node(&attribute, page, &ixFileHandle);
-    node->cPage = 0;
-    if(node->nodeType == RootOnly) {
+    Node node = Node(&attribute, page, &ixFileHandle);
+    node.cPage = 0;
+    if(node.nodeType == RootOnly) {
         int pos;
         bool exist;
-        node->locateChildPos(pos, exist, key);
+        node.locateChildPos(pos, exist, key);
         if(!exist) {
             // -10 indicates delete a non-existing entry
             return -10;
@@ -273,15 +273,15 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
 
         // Locate key position, minus 1 form child position
         pos = pos-1;
-        RC rc = node->deleteRecord(pos, rid);
+        RC rc = node.deleteRecord(pos, rid);
         if(rc != 0) {
             return rc;
         }
-        node->writeNodeToPage(ixFileHandle);
+        node.writeNodeToPage(ixFileHandle);
         return rc;
     }
     vector<Node*> path;
-    constructPathToLeaf(ixFileHandle, path, node, key, attribute);
+    constructPathToLeaf(ixFileHandle, path, &node, key, attribute);
     Node *leaf = path[path.size()-1];
     int pos;
     bool exist;
@@ -352,20 +352,20 @@ void IndexManager::printBtree(IXFileHandle &ixFileHandle, const Attribute &attri
 void IndexManager::printNode(IXFileHandle &ixFileHandle, const Attribute &attribute, int &pageNum, int indent) const {
     void *page = (char *)malloc(PAGE_SIZE);
     ixFileHandle.fileHandle.readPage(pageNum, page);
-    Node *node = new Node(&attribute, page, &ixFileHandle);
-    if(node->nodeType == RootOnly || node->nodeType == Leaf) {
+    Node node = Node(&attribute, page, &ixFileHandle);
+    if(node.nodeType == RootOnly || node.nodeType == Leaf) {
         printf("%*s%s", indent, "", "{\n");
-        node->printRids(indent+1);
+        node.printRids(indent+1);
         printf("%*s%s", indent, "", "}");
     } else {
         printf("%*s%s", indent, "", "{\n");
         printf("%*s%s", indent, "", "\"keys\":[");
-        node->printKeys();
+        node.printKeys();
         printf("%*s%s", indent, "", "]\n");
         printf("%*s%s", indent, "", "\"children\":[\n");
-        for(int i = 0; i < node->children.size(); i ++) {
-            printNode(ixFileHandle, attribute, node->children[i], indent+1);
-            if (i != node->children.size() - 1)
+        for(int i = 0; i < node.children.size(); i ++) {
+            printNode(ixFileHandle, attribute, node.children[i], indent+1);
+            if (i != node.children.size() - 1)
             {
                 printf(",");
                 printf("\n");
