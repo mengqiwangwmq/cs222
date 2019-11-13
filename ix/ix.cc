@@ -78,9 +78,6 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
                 split(path, ixFileHandle);
             } else {
                 leaf->writeNodeToPage(ixFileHandle);
-                for(int i = 0; i < path.size(); i ++) {
-                    delete path[i];
-                }
                 path.clear();
             }
         }
@@ -879,9 +876,7 @@ bool Node::isEqual(const void *compValue, const void *compKey) {
         int value;
         int key;
         memcpy(&value, compValue, sizeof(int));
-        cout<<value<<endl;
         memcpy(&key, compKey, sizeof(int));
-        cout<<key<<endl;
         return value == key;
     } else if(this->attrType == TypeReal) {
         float value;
