@@ -61,6 +61,10 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
             } else {
                 root.writeNodeToPage(ixFileHandle);
             }
+            for(int i = 0; i < root.keys.size()-1; i ++) {
+                free(root.keys[i]);
+            }
+            root.keys.clear();
         } else {
             vector<Node *> path;
             constructPathToLeaf(ixFileHandle, path, &root, key, attribute);
