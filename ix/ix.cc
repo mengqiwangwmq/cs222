@@ -82,11 +82,11 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
                 split(path, ixFileHandle);
             } else {
                 leaf->writeNodeToPage(ixFileHandle);
-                for(int i = 1; i < path.size(); i ++) {
-                    delete path[i];
-                }
-                path.clear();
             }
+            for(int i = 1; i < path.size(); i ++) {
+                delete path[i];
+            }
+            path.clear();
         }
     }
     return 0;
