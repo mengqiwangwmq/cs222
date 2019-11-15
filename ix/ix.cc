@@ -63,13 +63,13 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
             } else {
                 root.writeNodeToPage(ixFileHandle);
             }
-            /*
+
             if(root.keys.size() > 1) {
-                for(int i = 0; i < root.keys.size()-1; i ++) {
+                for(int i = 0; i < root.keys.size(); i ++) {
                     free(root.keys[i]);
                 }
             }
-             */
+
             root.keys.clear();
         } else {
             vector<Node *> path;
@@ -638,9 +638,6 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
             this->keys.push_back(value);
-            //int test;
-            //memcpy(&test, this->keys[0], sizeof(int));
-            //cout<<test<<endl;
         } else if(this->attrType == TypeReal) {
             void *value = malloc(attribute->length);
             memcpy(value, (char *)page+offset, sizeof(int));
@@ -892,10 +889,22 @@ int Node::serializeOverflowPage(int start, int end, void *page) {
 }
 
 RC Node::insertKey(int &pos, const void *key) {
-    if(this->keys.size() >= 1) {
-        this->keys.insert(this->keys.begin()+pos, (void *)key);
+    void *value;
+    if(this->attrType == TypeInt || this->attrType == TypeReal) {
+        value = malloc(attribute->length);
+        memcpy(value, key, sizeof(int));
     } else {
-        this->keys.push_back((void *)key);
+        int length;
+        memcpy(&length, key, sizeof(int));
+        value = malloc(length + sizeof(int));
+        memcpy(value, &length, sizeof(int));
+        memcpy((char *)value+sizeof(int), (char *)key+ sizeof(int), length);
+    }
+
+    if(this->keys.size() >= 1) {
+        this->keys.insert(this->keys.begin()+pos, (void *)value);
+    } else {
+        this->keys.push_back((void *)value);
     }
 }
 
