@@ -41,6 +41,8 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.readPage(0, page);
         Node root = Node(&attribute, page, &ixFileHandle);
+        int keyLen;
+        memcpy(&keyLen, root.keys[0], sizeof(int));
         free(page);
         root.cPage = 0;
         if(root.nodeType == RootOnly) {
@@ -56,14 +58,18 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
             vector<Node*> path;
             path.push_back(&root);
 
-            if((!exist || root.keys.size() > 0) && root.getNodeSize() > PAGE_SIZE) {
+            if((!exist || root.keys.size() > 1) && root.getNodeSize() > PAGE_SIZE) {
                 split(path, ixFileHandle);
             } else {
                 root.writeNodeToPage(ixFileHandle);
             }
-            for(int i = 0; i < root.keys.size()-1; i ++) {
-                free(root.keys[i]);
+            /*
+            if(root.keys.size() > 1) {
+                for(int i = 0; i < root.keys.size()-1; i ++) {
+                    free(root.keys[i]);
+                }
             }
+             */
             root.keys.clear();
         } else {
             vector<Node *> path;
@@ -299,7 +305,6 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         return -10;
     }
     RC rc = leaf->deleteRecord(pos, rid);
-    cout<<rc<<endl;
     if(rc != 0) {
         return rc;
     }
@@ -454,6 +459,9 @@ IX_ScanIterator::IX_ScanIterator() {
     this->cPage = 0;
     this->cKey = 0;
     this->cRec = -1;
+    this->lastPage = -1;
+    this->lastKey = -1;
+    this->lastRec = -1;
 }
 
 IX_ScanIterator::~IX_ScanIterator() {
@@ -502,13 +510,13 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         }
 
         if(this->lowKey != NULL) {
-            if (!((this->lowKeyInclusive && this->node->isLargerAndEqualThan(node->keys[this->cKey], this->lowKey)) ||
-                  (!this->lowKeyInclusive && this->node->isLargerThan(node->keys[this->cKey], this->lowKey)))) {
+            if (!((this->lowKeyInclusive && this->node->isLargerThan(node->keys[this->cKey], this->lowKey) >= 0) ||
+                  (!this->lowKeyInclusive && this->node->isLargerThan(node->keys[this->cKey], this->lowKey) == 1))) {
                 continue;
             }
         }
         if(this->highKey != NULL) {
-            if (!((this->highKeyInclusive && this->node->isLessThan(node->keys[this->cKey], this->highKey) == 0) ||
+            if (!((this->highKeyInclusive && this->node->isLessThan(node->keys[this->cKey], this->highKey) >= 0) ||
                   (!this->highKeyInclusive && this->node->isLessThan(node->keys[this->cKey], this->highKey) == 1))) {
                 return IX_EOF;
             }
@@ -523,9 +531,27 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
             memcpy(key, &length, sizeof(int));
             memcpy((char *)key + sizeof(int), (char *)this->node->keys[this->cKey] + sizeof(int), length);
         }
-        return 0;
         // TODO: lastPage, lastKey, lastRec
+        if(this->lastPage == this->cPage) {
+            void *page = malloc(PAGE_SIZE);
+            ixFileHandle->fileHandle.readPage(this->cPage, page);
+            delete this->node;
+            this->node = new Node(attribute, page, ixFileHandle);
+            this->node->cPage = this->cPage;
+            RID lastRid = this->node->pointers[this->lastKey][this->lastRec];
+            // In this situation, the prevRid has already been deleted
+            if(lastRid.pageNum != this->prevRid.pageNum || lastRid.slotNum != this->prevRid.slotNum) {
+                this->cKey = this->lastKey;
+                this->cRec = this->lastRec;
+            }
+        }
+        this->prevRid = rid;
+        this->lastPage = this->cPage;
+        this->lastKey = this->cKey;
+        this->lastRec = this->cRec;
+        break;
     }
+    return 0;
 }
 
 RC IX_ScanIterator::close() {
@@ -612,6 +638,9 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
             this->keys.push_back(value);
+            //int test;
+            //memcpy(&test, this->keys[0], sizeof(int));
+            //cout<<test<<endl;
         } else if(this->attrType == TypeReal) {
             void *value = malloc(attribute->length);
             memcpy(value, (char *)page+offset, sizeof(int));
@@ -623,7 +652,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             offset += sizeof(int);
             void *value = malloc(length + sizeof(int));
             memcpy(value, &length, sizeof(int));
-            memcpy(value, (char *)page+offset, sizeof(length));
+            memcpy((char *)value+sizeof(int), (char *)page+offset, length);
             offset += length;
             this->keys.push_back(value);
         }
@@ -662,18 +691,61 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
         }
     }
 
-    // TODO: Deal with overflow pages
+    int overFlowPage;
+    memcpy(&overFlowPage, (char *)page + offset, sizeof(int));
+    offset += sizeof(int);
+    if (this->nodeType == RootOnly || this->nodeType == Root)
+        this->cPage = 0;
+    if (overFlowPage != -1)
+    {
+        this->isOverflow = true;
+        this->overFlowPages.push_back(overFlowPage);
+        this->deserializeOverflowPage(overFlowPage, ixfileHandle);
+    }
+}
+
+RC Node::deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle) {
+    void *page = malloc(PAGE_SIZE);
+    ixfileHandle->fileHandle.readPage(nodeId, page);
+    int offset = 0;
+    int nRids;
+    memcpy(&nRids, (char *)page + offset, sizeof(int));
+    offset += sizeof(int);
+    for (int i = 0; i < nRids; ++i)
+    {
+        RID rid;
+        memcpy(&rid.pageNum, (char *)page + offset, sizeof(int));
+        offset += sizeof(int);
+        memcpy(&rid.slotNum, (char *)page + offset, sizeof(int));
+        offset += sizeof(int);
+        this->pointers[0].push_back(rid);
+    }
+    int overFlowPage;
+    memcpy(&overFlowPage, (char *)page + offset, sizeof(int));
+    offset += sizeof(int);
+    if (overFlowPage != -1)
+    {
+        this->overFlowPages.push_back(overFlowPage);
+        this->deserializeOverflowPage(overFlowPage, ixfileHandle);
+    }
+    free(page);
+    return 0;
 }
 
 RC Node::writeNodeToPage(IXFileHandle &ixfileHandle) {
     if((this->nodeType == RootOnly || this->nodeType == Leaf) && this->keys.size() == 1 && this->getNodeSize() > PAGE_SIZE) {
+        int nRidInOP = (PAGE_SIZE - 2* sizeof(int))/(2* sizeof(int));
         int nRidInNode = (PAGE_SIZE - this->getHeaderAndKeysSize())/(2* sizeof(int));
         int left = this->pointers[0].size() - nRidInNode;
-        int nRidInOP = (PAGE_SIZE - 2* sizeof(int))/(2* sizeof(int));
-        int nOP = left/nRidInOP + 1;
-
-        while(nOP > this->overFlowPages.size()) {
-            for(int i = 0; i < nOP; i ++) {
+        int nNewRidToWrite = left;
+        if(this->overFlowPages.size() > 0) {
+            for(int i = 0; i < this->overFlowPages.size(); i ++) {
+                nNewRidToWrite -= nRidInOP;
+            }
+        }
+        if(nNewRidToWrite > 0) {
+            int nNeededPage = nNewRidToWrite/nRidInOP + 1;
+            for(int i = 0; i < nNeededPage; i ++) {
                 void *page = (char *)malloc(PAGE_SIZE);
                 ixfileHandle.fileHandle.appendPage(page);
                 this->overFlowPages.push_back(ixfileHandle.fileHandle.getNumberOfPages()-1);
@@ -693,7 +765,7 @@ RC Node::writeNodeToPage(IXFileHandle &ixfileHandle) {
         memcpy((char *)page+offset, &nKeys, sizeof(int));
         offset += sizeof(int);
         for(int i = 0; i < nKeys; i ++) {
-            memcpy((char *)page+offset, &this->keys[i], sizeof(int));
+            memcpy((char *)page+offset, this->keys[i], sizeof(int));
             offset += sizeof(int);
         }
         int nRids = this->pointers.size();
@@ -718,8 +790,8 @@ RC Node::writeNodeToPage(IXFileHandle &ixfileHandle) {
         ixfileHandle.fileHandle.writePage(this->cPage, page);
 
         void *overflowPage = (char *)malloc(PAGE_SIZE);
-        for(int i = 0; i < nOP; i ++) {
-            if(i < nOP-1) {
+        for(int i = 0; i < this->overFlowPages.size(); i ++) {
+            if(i < this->overFlowPages.size()-1) {
                 int ridsSize = this->serializeOverflowPage(i*nRidInOP+nRidInNode, (i+1)*nRidInOP+nRidInNode, overflowPage);
                 memcpy((char *)overflowPage+ridsSize, &this->overFlowPages[i+1], sizeof(int));
             } else {
@@ -728,9 +800,9 @@ RC Node::writeNodeToPage(IXFileHandle &ixfileHandle) {
                 memcpy((char *)overflowPage+ridsSize, &nextPage, sizeof(int));
             }
             ixfileHandle.fileHandle.writePage(this->overFlowPages[i], overflowPage);
-            free(overflowPage);
-            return 0;
         }
+        free(overflowPage);
+        return 0;
     } else {
         void *page = (char *)malloc(PAGE_SIZE);
         this->serialize(page);
@@ -764,6 +836,7 @@ RC Node::serialize(void *page) {
             int length;
             memcpy(&length, this->keys[i], sizeof(int));
             memcpy((char *)page+offset, this->keys[i], sizeof(int)+length);
+            memcpy(&length, (char *)page+offset, sizeof(int));
             offset += (sizeof(int) + length);
         }
     }
@@ -796,16 +869,17 @@ RC Node::serialize(void *page) {
         }
     }
 
-    //TODO: deal with overflow pages
-    if(this->isOverflow) {
-
-    }
+    int overFlowPage = -1;
+    memcpy((char *)page + offset, &overFlowPage, sizeof(int));
+    offset += sizeof(int);
+    return 0;
 }
 
 int Node::serializeOverflowPage(int start, int end, void *page) {
     int nRid = end - start;
     int offset = 0;
     memcpy((char *)page+offset, &nRid, sizeof(int));
+    offset += sizeof(int);
     for(int i = start; i < end; i ++) {
         int pageNum = this->pointers[0][i].pageNum;
         int slotNum = this->pointers[0][i].slotNum;
@@ -847,11 +921,12 @@ RC Node::insertChild(const int &pos, int &pageNum) {
 
 RC Node::deleteRecord(int pos, const RID &rid) {
     for(int j = 0; j < this->pointers[pos].size(); j ++) {
+        if(this->pointers[pos].size() == 1) {
+            this->keys.erase(this->keys.begin()+pos, this->keys.begin()+pos+1);
+            return 0;
+        }
         if(rid.pageNum == this->pointers[pos][j].pageNum && rid.slotNum == this->pointers[pos][j].slotNum) {
             this->pointers[pos].erase(this->pointers[pos].begin()+j, this->pointers[pos].begin()+j+1);
-            if(this->pointers.size() == 1) {
-                this->keys.erase(this->keys.begin()+pos, this->keys.begin()+pos+1);
-            }
             return 0;
         }
     }
@@ -900,8 +975,8 @@ bool Node::isEqual(const void *compValue, const void *compKey) {
         memcpy(&keyLen, (char *)compKey, sizeof(int));
         char *value = (char *)malloc(valueLen+1);
         char *key = (char *)malloc(keyLen+1);
-        memcpy(&value, (char *)compValue, valueLen);
-        memcpy(&key, (char *)compKey, keyLen);
+        memcpy(value, (char *)compValue+ sizeof(int), valueLen);
+        memcpy(key, (char *)compKey+ sizeof(int), keyLen);
         value[valueLen] = '\0';
         key[keyLen] = '\0';
         valueStr = string(value);
@@ -928,7 +1003,7 @@ int Node::isLessThan(const void *compValue, const void *compKey) {
         memcpy(&key, compKey, sizeof(int));
         if(value < key) {
             return 1;
-        } else {
+        } else if(value == key){
             return 0;
         }
     } else if(this->attrType == TypeVarChar) {
@@ -940,34 +1015,42 @@ int Node::isLessThan(const void *compValue, const void *compKey) {
         memcpy(&keyLen, (char *)compKey, sizeof(int));
         char *value = (char *)malloc(valueLen+1);
         char *key = (char *)malloc(keyLen+1);
-        memcpy(&value, (char *)compValue, valueLen);
-        memcpy(&key, (char *)compKey, keyLen);
+        memcpy(value, (char *)compValue+sizeof(int), valueLen);
+        memcpy(key, (char *)compKey+ sizeof(int), keyLen);
         value[valueLen] = '\0';
         key[keyLen] = '\0';
         valueStr = string(value);
         keyStr = string(key);
-        if(value < key) {
+        if(valueStr < keyStr) {
             return 1;
-        } else {
+        } else if(valueStr == keyStr){
             return 0;
         }
     }
     return -1;
 }
 
-bool Node::isLargerAndEqualThan(const void *compValue, const void *compKey) {
+int Node::isLargerThan(const void *compValue, const void *compKey) {
     if(this->attrType == TypeInt) {
         int value;
         int key;
         memcpy(&value, compValue, sizeof(int));
         memcpy(&key, compKey, sizeof(int));
-        return value >= key;
+        if(value > key) {
+            return 1;
+        } else if(value == key){
+            return 0;
+        }
     } else if(this->attrType == TypeReal) {
         float value;
         float key;
         memcpy(&value, compValue, sizeof(int));
         memcpy(&key, compKey, sizeof(int));
-        return value >= key;
+        if(value > key) {
+            return 1;
+        } else if(value == key){
+            return 0;
+        }
     } else if(this->attrType == TypeVarChar) {
         string valueStr;
         string keyStr;
@@ -977,46 +1060,19 @@ bool Node::isLargerAndEqualThan(const void *compValue, const void *compKey) {
         memcpy(&keyLen, (char *)compKey, sizeof(int));
         char *value = (char *)malloc(valueLen+1);
         char *key = (char *)malloc(keyLen+1);
-        memcpy(&value, (char *)compValue, valueLen);
-        memcpy(&key, (char *)compKey, keyLen);
+        memcpy(value, (char *)compValue+sizeof(int), valueLen);
+        memcpy(key, (char *)compKey+ sizeof(int), keyLen);
         value[valueLen] = '\0';
         key[keyLen] = '\0';
         valueStr = string(value);
         keyStr = string(key);
-        return valueStr >= keyStr;
+        if(valueStr > keyStr) {
+            return 1;
+        } else if(valueStr == keyStr){
+            return 0;
+        }
     }
-}
-
-bool Node::isLargerThan(const void *compValue, const void *compKey) {
-    if(this->attrType == TypeInt) {
-        int value;
-        int key;
-        memcpy(&value, compValue, sizeof(int));
-        memcpy(&key, compKey, sizeof(int));
-        return value > key;
-    } else if(this->attrType == TypeReal) {
-        float value;
-        float key;
-        memcpy(&value, compValue, sizeof(int));
-        memcpy(&key, compKey, sizeof(int));
-        return value > key;
-    } else if(this->attrType == TypeVarChar) {
-        string valueStr;
-        string keyStr;
-        int valueLen;
-        int keyLen;
-        memcpy(&valueLen, (char *)compValue, sizeof(int));
-        memcpy(&keyLen, (char *)compKey, sizeof(int));
-        char *value = (char *)malloc(valueLen+1);
-        char *key = (char *)malloc(keyLen+1);
-        memcpy(&value, (char *)compValue, valueLen);
-        memcpy(&key, (char *)compKey, keyLen);
-        value[valueLen] = '\0';
-        key[keyLen] = '\0';
-        valueStr = string(value);
-        keyStr = string(key);
-        return valueStr > keyStr;
-    }
+    return -1;
 }
 
 int Node::getNodeSize() {
@@ -1052,7 +1108,8 @@ int Node::getNodeSize() {
             offset += sizeof(int);
         }
     }
-
+    // isOverflow
+    offset += sizeof(int);
     this->size = offset;
     return offset;
 }

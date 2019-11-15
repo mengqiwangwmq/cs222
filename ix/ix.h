@@ -81,6 +81,10 @@ public:
     int cPage;
     int cKey;
     int cRec;
+    int lastPage;
+    int lastKey;
+    int lastRec;
+    RID prevRid;
 
     const void *lowKey;
     const void *highKey;
@@ -143,8 +147,6 @@ public :
     int insertKey(int &pos, const void* key);
     RC insertChild(const int &pos, int &pageNum);
     RC insertPointer(int pos, const bool &exist, const RID &rid);
-    RC appendChild(int pageNum);
-    RC appendPointer(vector<RID> rids);
     RC printKeys();
     RC printRids(int &indent);
     RC printChildren();
@@ -153,8 +155,7 @@ public :
     bool isLessHalfFull();
     bool isEqual(const void *compValue, const void *compKey);
     int isLessThan(const void *compValue, const void *compKey);
-    bool isLargerAndEqualThan(const void *compValue, const void *compKey);
-    bool isLargerThan(const void *compValue, const void *compKey);
+    int isLargerThan(const void *compValue, const void *compKey);
     bool checkExist(const void *value);
     RC locateChildPos(int &pos, bool &exist, const void * value);
     int getKeyPosition(const void *key);
