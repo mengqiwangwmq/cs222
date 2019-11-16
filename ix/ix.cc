@@ -37,6 +37,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         ixFileHandle.fileHandle.appendPage(page);
         free(page);
         root.writeNodeToPage(ixFileHandle);
+        return 0;
     } else {
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.readPage(0, page);
@@ -63,14 +64,6 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
             } else {
                 root.writeNodeToPage(ixFileHandle);
             }
-
-            if(root.keys.size() > 1) {
-                for(int i = 0; i < root.keys.size(); i ++) {
-                    free(root.keys[i]);
-                }
-            }
-
-            root.keys.clear();
         } else {
             vector<Node *> path;
             constructPathToLeaf(ixFileHandle, path, &root, key, attribute);
@@ -122,8 +115,6 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         node->next = newLeaf.cPage;
         newLeaf.previous = node->cPage;
 
-        newLeaf.writeNodeToPage(ixFileHandle);
-
         Node *parent = path[path.size()-2];
         int pos;
         bool exist;
@@ -136,6 +127,7 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
             parent->insertChild(pos, newLeaf.cPage);
         }
         node->writeNodeToPage(ixFileHandle);
+        newLeaf.writeNodeToPage(ixFileHandle);
         // Delete the toppest element
         delete path[path.size()-1];
         path.pop_back();
@@ -197,11 +189,13 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         newLeaf2.nodeType = Leaf;
         for(int i = 0; i < node->keys.size(); i ++) {
             if(i < mid) {
-                newLeaf1.keys.push_back(node->keys[i]);
+                int size1 = newLeaf1.keys.size();
+                newLeaf1.insertKey(size1, node->keys[i]);
                 newLeaf1.pointers.push_back(node->pointers[i]);
             }
             if(i >= mid) {
-                newLeaf2.keys.push_back(node->keys[i]);
+                int size2 = newLeaf2.keys.size();
+                newLeaf2.insertKey(size2, node->keys[i]);
                 newLeaf2.pointers.push_back(node->pointers[i]);
             }
         }
@@ -601,6 +595,13 @@ RC IXFileHandle::collectCounterValues(unsigned &readPageCount, unsigned &writePa
     writePageCount = this->ixWritePageCounter;
     appendPageCount = this->ixAppendPageCounter;
     return 0;
+}
+
+Node::~Node() {
+    for (int i = 0; i < this->keys.size(); ++i)
+    {
+        free(keys[i]);
+    }
 }
 
 Node::Node(const Attribute &attribute) {

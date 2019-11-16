@@ -138,7 +138,7 @@ public :
     Node(const Attribute *attribute, const void* page, IXFileHandle *ixfileHandle);
     Node(const Attribute &attribute);
     Node(const Attribute *attribute);
-    ~Node() = default;
+    ~Node();
     RC serialize(void *page);
     int serializeOverflowPage(int start, int end, void* page);
     RC deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle);
