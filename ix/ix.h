@@ -154,12 +154,12 @@ public :
     int getNodeSize();
     bool isLessHalfFull();
     bool isEqual(const void *compValue, const void *compKey);
-    int isLessThan(const void *compValue, const void *compKey);
-    int isLargerThan(const void *compValue, const void *compKey);
+    int compareLess(const void *compValue, const void *compKey);
+    int compareLarge(const void *compValue, const void *compKey);
     bool checkExist(const void *value);
     RC locateChildPos(int &pos, bool &exist, const void * value);
     int getKeyPosition(const void *key);
-    int getHeaderAndKeysSize();
+    int calHeaderSize();
     RC writeNodeToPage(IXFileHandle &ixfileHandle);
     RC replaceKey(int pos, void *key);
     int deleteRecord(int pos, const RID &rid);

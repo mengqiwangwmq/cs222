@@ -302,6 +302,10 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
     if(rc != 0) {
         return rc;
     }
+    for(int i = 1; i < path.size(); i ++) {
+        delete path[i];
+    }
+    path.clear();
     return rc;
 }
 
@@ -504,14 +508,14 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         }
 
         if(this->lowKey != NULL) {
-            if (!((this->lowKeyInclusive && this->node->isLargerThan(node->keys[this->cKey], this->lowKey) >= 0) ||
-                  (!this->lowKeyInclusive && this->node->isLargerThan(node->keys[this->cKey], this->lowKey) == 1))) {
+            if (!((this->lowKeyInclusive && this->node->compareLarge(node->keys[this->cKey], this->lowKey) >= 0) ||
+                  (!this->lowKeyInclusive && this->node->compareLarge(node->keys[this->cKey], this->lowKey) == 1))) {
                 continue;
             }
         }
         if(this->highKey != NULL) {
-            if (!((this->highKeyInclusive && this->node->isLessThan(node->keys[this->cKey], this->highKey) >= 0) ||
-                  (!this->highKeyInclusive && this->node->isLessThan(node->keys[this->cKey], this->highKey) == 1))) {
+            if (!((this->highKeyInclusive && this->node->compareLess(node->keys[this->cKey], this->highKey) >= 0) ||
+                  (!this->highKeyInclusive && this->node->compareLess(node->keys[this->cKey], this->highKey) == 1))) {
                 return IX_EOF;
             }
         }
@@ -538,6 +542,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
                 this->cKey = this->lastKey;
                 this->cRec = this->lastRec;
             }
+            free(page);
         }
         this->prevRid = rid;
         this->lastPage = this->cPage;
@@ -733,7 +738,7 @@ RC Node::deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle) {
 RC Node::writeNodeToPage(IXFileHandle &ixfileHandle) {
     if((this->nodeType == RootOnly || this->nodeType == Leaf) && this->keys.size() == 1 && this->getNodeSize() > PAGE_SIZE) {
         int nRidInOP = (PAGE_SIZE - 2* sizeof(int))/(2* sizeof(int));
-        int nRidInNode = (PAGE_SIZE - this->getHeaderAndKeysSize())/(2* sizeof(int));
+        int nRidInNode = (PAGE_SIZE - this->calHeaderSize())/(2* sizeof(int));
         int left = this->pointers[0].size() - nRidInNode;
         int nNewRidToWrite = left;
         if(this->overFlowPages.size() > 0) {
@@ -952,7 +957,7 @@ RC Node::locateChildPos(int &pos, bool &exist, const void *value) {
             exist = true;
             return 0;
         }
-        if(isLessThan(value, keys[i]) == 1) {
+        if(compareLess(value, keys[i]) == 1) {
             pos = i;
             exist = false;
             return 0;
@@ -995,7 +1000,7 @@ bool Node::isEqual(const void *compValue, const void *compKey) {
     }
 }
 
-int Node::isLessThan(const void *compValue, const void *compKey) {
+int Node::compareLess(const void *compValue, const void *compKey) {
     if(this->attrType == TypeInt) {
         int value;
         int key;
@@ -1040,7 +1045,7 @@ int Node::isLessThan(const void *compValue, const void *compKey) {
     return -1;
 }
 
-int Node::isLargerThan(const void *compValue, const void *compKey) {
+int Node::compareLarge(const void *compValue, const void *compKey) {
     if(this->attrType == TypeInt) {
         int value;
         int key;
@@ -1124,7 +1129,7 @@ int Node::getNodeSize() {
     return offset;
 }
 
-int Node::getHeaderAndKeysSize() {
+int Node::calHeaderSize() {
     int offset = 0;
     offset += 3 * sizeof(int);
     offset += sizeof(int);
