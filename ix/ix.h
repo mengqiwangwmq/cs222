@@ -33,8 +33,8 @@ public:
 
     // Insert an entry into the given index that is indicated by the given ixFileHandle.
     RC insertEntry(IXFileHandle &ixFileHandle, const Attribute &attribute, const void *key, const RID &rid);
-    RC split(vector<Node*> &path, IXFileHandle &ixFileHandle);
-    RC constructPathToLeaf(IXFileHandle &ixFileHandle, vector<Node *> &path, Node *root, const void *key, const Attribute &attribute);
+    RC split(vector<Node*> &route, IXFileHandle &ixFileHandle);
+    RC constructRouteToLeaf(IXFileHandle &ixFileHandle, vector<Node *> &route, Node *root, const void *key, const Attribute &attribute);
 
     // Delete an entry from the given index that is indicated by the given ixFileHandle.
     RC deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attribute, const void *key, const RID &rid);
@@ -81,9 +81,9 @@ public:
     int cPage;
     int cKey;
     int cRec;
-    int lastPage;
-    int lastKey;
-    int lastRec;
+    int prevP;
+    int prevK;
+    int prevR;
     RID prevRid;
 
     const void *lowKey;
@@ -148,24 +148,15 @@ public :
     RC insertChild(const int &pos, int &pageNum);
     RC insertPointer(int pos, const bool &exist, const RID &rid);
     RC printKeys();
-    RC printRids(int &indent);
-    RC printChildren();
     RC printRids(int indent);
     int getNodeSize();
-    bool isLessHalfFull();
-    bool isEqual(const void *compValue, const void *compKey);
+    bool compareEqual(const void *compValue, const void *compKey);
     int compareLess(const void *compValue, const void *compKey);
     int compareLarge(const void *compValue, const void *compKey);
-    bool checkExist(const void *value);
     RC locateChildPos(int &pos, bool &exist, const void * value);
-    int getKeyPosition(const void *key);
     int calHeaderSize();
-    RC writeNodeToPage(IXFileHandle &ixfileHandle);
-    RC replaceKey(int pos, void *key);
+    RC serializeNode(IXFileHandle &ixfileHandle);
     int deleteRecord(int pos, const RID &rid);
-    int findKey(const void* key);
-    int getRightSibling(IXFileHandle &ixfileHandle, Node *parent, int &pos);
-    int getLeftSibling(IXFileHandle &ixfileHandle, Node *parent, int &pos);
 };
 
 #endif

@@ -27,25 +27,23 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
     if(ixFileHandle.fileHandle.getNumberOfPages() == 0) {
         Node root = Node(attribute);
         root.nodeType = RootOnly;
+        root.cPage = 0;
         int pos = 0;
         root.insertKey(pos, key);
         vector<RID> rids;
         rids.push_back(rid);
         root.pointers.push_back(rids);
-        root.cPage = 0;
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page);
         free(page);
-        root.writeNodeToPage(ixFileHandle);
+        root.serializeNode(ixFileHandle);
         return 0;
     } else {
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.readPage(0, page);
         Node root = Node(&attribute, page, &ixFileHandle);
-        int keyLen;
-        memcpy(&keyLen, root.keys[0], sizeof(int));
-        free(page);
         root.cPage = 0;
+        free(page);
         if(root.nodeType == RootOnly) {
             int pos;
             bool exist;
@@ -56,18 +54,18 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
             } else {
                 root.insertPointer(pos-1, exist, rid);
             }
-            vector<Node*> path;
-            path.push_back(&root);
+            vector<Node*> route;
+            route.push_back(&root);
 
             if((!exist || root.keys.size() > 1) && root.getNodeSize() > PAGE_SIZE) {
-                split(path, ixFileHandle);
+                split(route, ixFileHandle);
             } else {
-                root.writeNodeToPage(ixFileHandle);
+                root.serializeNode(ixFileHandle);
             }
         } else {
-            vector<Node *> path;
-            constructPathToLeaf(ixFileHandle, path, &root, key, attribute);
-            Node *leaf = path[path.size()-1];
+            vector<Node *> route;
+            constructRouteToLeaf(ixFileHandle, route, &root, key, attribute);
+            Node *leaf = route[route.size()-1];
             int pos;
             bool exist;
             leaf->locateChildPos(pos, exist, key);
@@ -78,21 +76,21 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
                 leaf->insertPointer(pos-1, exist, rid);
             }
             if(leaf->keys.size() > 1 && leaf->getNodeSize() > PAGE_SIZE) {
-                split(path, ixFileHandle);
+                split(route, ixFileHandle);
             } else {
-                leaf->writeNodeToPage(ixFileHandle);
+                leaf->serializeNode(ixFileHandle);
             }
-            for(int i = 1; i < path.size(); i ++) {
-                delete path[i];
+            for(int i = 1; i < route.size(); i ++) {
+                delete route[i];
             }
-            path.clear();
+            route.clear();
         }
     }
     return 0;
 }
 
-RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
-    Node *node = path[path.size()-1];
+RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
+    Node *node = route[route.size()-1];
     if(node->nodeType == Leaf) {
         int mid = node->keys.size()/2;
         Node newLeaf = Node(node->attribute);
@@ -115,7 +113,7 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         node->next = newLeaf.cPage;
         newLeaf.previous = node->cPage;
 
-        Node *parent = path[path.size()-2];
+        Node *parent = route[route.size()-2];
         int pos;
         bool exist;
         parent->locateChildPos(pos, exist, newLeaf.keys[0]);
@@ -126,16 +124,16 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
             // pos + 1
             parent->insertChild(pos, newLeaf.cPage);
         }
-        node->writeNodeToPage(ixFileHandle);
-        newLeaf.writeNodeToPage(ixFileHandle);
+        node->serializeNode(ixFileHandle);
+        newLeaf.serializeNode(ixFileHandle);
         // Delete the toppest element
-        delete path[path.size()-1];
-        path.pop_back();
+        delete route[route.size()-1];
+        route.pop_back();
 
         if(parent->keys.size() > 1 && parent->getNodeSize() > PAGE_SIZE) {
-            split(path, ixFileHandle);
+            split(route, ixFileHandle);
         } else {
-            parent->writeNodeToPage(ixFileHandle);
+            parent->serializeNode(ixFileHandle);
         }
     } else if(node->nodeType == Intermediate) {
         int mid = node->keys.size()/2;
@@ -155,7 +153,7 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         new_Intermediate.cPage = ixFileHandle.fileHandle.getNumberOfPages()-1;
         free(page);
 
-        Node *parent = path[path.size()-2];
+        Node *parent = route[route.size()-2];
         int pos;
         bool exist;
         parent->locateChildPos(pos, exist, node->keys[mid]);
@@ -165,20 +163,20 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         } else {
             parent->insertChild(pos, new_Intermediate.cPage);
         }
-        new_Intermediate.writeNodeToPage(ixFileHandle);
+        new_Intermediate.serializeNode(ixFileHandle);
 
         node->keys.erase(node->keys.begin()+mid,node->keys.end());
         node->children.erase(node->children.begin()+mid+1, node->children.end());
-        node->writeNodeToPage(ixFileHandle);
-        delete path[path.size() - 1];
-        path.pop_back();
+        node->serializeNode(ixFileHandle);
+        delete route[route.size() - 1];
+        route.pop_back();
         if((!exist || parent->keys.size() > 1) && parent->getNodeSize() > PAGE_SIZE)
         {
-            split(path, ixFileHandle);
+            split(route, ixFileHandle);
         }
         else
         {
-            parent->writeNodeToPage(ixFileHandle);
+            parent->serializeNode(ixFileHandle);
         }
     } else if(node->nodeType == RootOnly) {
         int mid = node->keys.size()/2;
@@ -215,9 +213,9 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         newLeaf1.next = newLeaf2.cPage;
         newLeaf2.previous = newLeaf1.cPage;
         // TODO: consider overflow page
-        node->writeNodeToPage(ixFileHandle);
-        newLeaf1.writeNodeToPage(ixFileHandle);
-        newLeaf2.writeNodeToPage(ixFileHandle);
+        node->serializeNode(ixFileHandle);
+        newLeaf1.serializeNode(ixFileHandle);
+        newLeaf2.serializeNode(ixFileHandle);
     }else if(node->nodeType == Root) {
         int mid = node->keys.size()/2;
         Node newInter1 = Node(node->attribute);
@@ -254,9 +252,9 @@ RC IndexManager::split(vector<Node*> &path, IXFileHandle &ixFileHandle) {
         node->children.push_back(newInter1.cPage);
         node->children.push_back(newInter2.cPage);
         // TODO: consider overflow pages
-        node->writeNodeToPage(ixFileHandle);
-        newInter1.writeNodeToPage(ixFileHandle);
-        newInter2.writeNodeToPage(ixFileHandle);
+        node->serializeNode(ixFileHandle);
+        newInter1.serializeNode(ixFileHandle);
+        newInter2.serializeNode(ixFileHandle);
     }
     return 0;
 }
@@ -286,12 +284,12 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         if(rc != 0) {
             return rc;
         }
-        node.writeNodeToPage(ixFileHandle);
+        node.serializeNode(ixFileHandle);
         return rc;
     }
-    vector<Node*> path;
-    constructPathToLeaf(ixFileHandle, path, &node, key, attribute);
-    Node *leaf = path[path.size()-1];
+    vector<Node*> route;
+    constructRouteToLeaf(ixFileHandle, route, &node, key, attribute);
+    Node *leaf = route[route.size()-1];
     int pos;
     bool exist;
     leaf->locateChildPos(pos, exist, key);
@@ -302,15 +300,15 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
     if(rc != 0) {
         return rc;
     }
-    for(int i = 1; i < path.size(); i ++) {
-        delete path[i];
+    for(int i = 1; i < route.size(); i ++) {
+        delete route[i];
     }
-    path.clear();
+    route.clear();
     return rc;
 }
 
-RC IndexManager::constructPathToLeaf(IXFileHandle &ixFileHandle, vector<Node*> &path, Node *root, const void *key, const Attribute &attribute) {
-    path.push_back(root);
+RC IndexManager::constructRouteToLeaf(IXFileHandle &ixFileHandle, vector<Node*> &route, Node *root, const void *key, const Attribute &attribute) {
+    route.push_back(root);
     if(root->nodeType == Leaf) {
         return 0;
     }
@@ -328,7 +326,7 @@ RC IndexManager::constructPathToLeaf(IXFileHandle &ixFileHandle, vector<Node*> &
     ixFileHandle.fileHandle.readPage(childPageNum, page);
     Node *node = new Node(root->attribute, page, &ixFileHandle);
     node->cPage = childPageNum;
-    constructPathToLeaf(ixFileHandle, path, node, key, attribute);
+    constructRouteToLeaf(ixFileHandle, route, node, key, attribute);
     free(page);
     return 0;
 }
@@ -431,11 +429,11 @@ RC Node::printRids(int indent) {
         }
         else if (this->attrType == TypeVarChar)
         {
-            int nameLength;
-            memcpy(&nameLength, (char *)this->keys[i], sizeof(int));
-            char* value_c = (char *)malloc(nameLength + 1);
-            memcpy(value_c, (char *)this->keys[i] + sizeof(int), nameLength);
-            value_c[nameLength] = '\0';
+            int length;
+            memcpy(&length, (char *)this->keys[i], sizeof(int));
+            char* value_c = (char *)malloc(length + 1);
+            memcpy(value_c, (char *)this->keys[i] + sizeof(int), length);
+            value_c[length] = '\0';
             printf("%s:", value_c);
             free(value_c);
         }
@@ -457,9 +455,9 @@ IX_ScanIterator::IX_ScanIterator() {
     this->cPage = 0;
     this->cKey = 0;
     this->cRec = -1;
-    this->lastPage = -1;
-    this->lastKey = -1;
-    this->lastRec = -1;
+    this->prevP = -1;
+    this->prevK = -1;
+    this->prevR = -1;
 }
 
 IX_ScanIterator::~IX_ScanIterator() {
@@ -529,25 +527,24 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
             memcpy(key, &length, sizeof(int));
             memcpy((char *)key + sizeof(int), (char *)this->node->keys[this->cKey] + sizeof(int), length);
         }
-        // TODO: lastPage, lastKey, lastRec
-        if(this->lastPage == this->cPage) {
+        if(this->prevP == this->cPage) {
             void *page = malloc(PAGE_SIZE);
             ixFileHandle->fileHandle.readPage(this->cPage, page);
             delete this->node;
             this->node = new Node(attribute, page, ixFileHandle);
             this->node->cPage = this->cPage;
-            RID lastRid = this->node->pointers[this->lastKey][this->lastRec];
+            RID lastRid = this->node->pointers[this->prevK][this->prevR];
             // In this situation, the prevRid has already been deleted
             if(lastRid.pageNum != this->prevRid.pageNum || lastRid.slotNum != this->prevRid.slotNum) {
-                this->cKey = this->lastKey;
-                this->cRec = this->lastRec;
+                this->cKey = this->prevK;
+                this->cRec = this->prevR;
             }
             free(page);
         }
         this->prevRid = rid;
-        this->lastPage = this->cPage;
-        this->lastKey = this->cKey;
-        this->lastRec = this->cRec;
+        this->prevP = this->cPage;
+        this->prevK = this->cKey;
+        this->prevR = this->cRec;
         break;
     }
     return 0;
@@ -639,12 +636,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
     memcpy(&nKeys, (char *)page+offset, sizeof(int));
     offset += sizeof(int);
     for(int i = 0; i < nKeys; i ++) {
-        if(this->attrType == TypeInt) {
-            void *value = malloc(attribute->length);
-            memcpy(value, (char *)page+offset, sizeof(int));
-            offset += attribute->length;
-            this->keys.push_back(value);
-        } else if(this->attrType == TypeReal) {
+        if(this->attrType == TypeInt || this->attrType == TypeReal) {
             void *value = malloc(attribute->length);
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
@@ -735,7 +727,7 @@ RC Node::deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle) {
     return 0;
 }
 
-RC Node::writeNodeToPage(IXFileHandle &ixfileHandle) {
+RC Node::serializeNode(IXFileHandle &ixfileHandle) {
     if((this->nodeType == RootOnly || this->nodeType == Leaf) && this->keys.size() == 1 && this->getNodeSize() > PAGE_SIZE) {
         int nRidInOP = (PAGE_SIZE - 2* sizeof(int))/(2* sizeof(int));
         int nRidInNode = (PAGE_SIZE - this->calHeaderSize())/(2* sizeof(int));
@@ -829,10 +821,7 @@ RC Node::serialize(void *page) {
     memcpy((char *)page+offset, &nKeys, sizeof(int));
     offset += sizeof(int);
     for(int i = 0; i < nKeys; i ++) {
-        if(this->attrType == TypeInt) {
-            memcpy((char *)page+offset, this->keys[i], sizeof(int));
-            offset += sizeof(int);
-        } else if(this->attrType == TypeReal) {
+        if(this->attrType == TypeInt || this->attrType == TypeReal) {
             memcpy((char *)page+offset, this->keys[i], sizeof(int));
             offset += sizeof(int);
         } else if(this->attrType == TypeVarChar) {
@@ -952,7 +941,7 @@ RC Node::deleteRecord(int pos, const RID &rid) {
 RC Node::locateChildPos(int &pos, bool &exist, const void *value) {
     int i;
     for(i = 0; i < this->keys.size(); i ++) {
-        if(isEqual(value, keys[i])) {
+        if(compareEqual(value, keys[i])) {
             pos = i+1;
             exist = true;
             return 0;
@@ -968,36 +957,42 @@ RC Node::locateChildPos(int &pos, bool &exist, const void *value) {
     return 0;
 }
 
-bool Node::isEqual(const void *compValue, const void *compKey) {
-    if(this->attrType == TypeInt) {
-        int value;
-        int key;
-        memcpy(&value, compValue, sizeof(int));
-        memcpy(&key, compKey, sizeof(int));
-        return value == key;
-    } else if(this->attrType == TypeReal) {
-        float value;
-        float key;
-        memcpy(&value, compValue, sizeof(int));
-        memcpy(&key, compKey, sizeof(int));
-        return value == key;
-    } else if(this->attrType == TypeVarChar) {
-        string valueStr;
-        string keyStr;
-        int valueLen;
-        int keyLen;
-        memcpy(&valueLen, (char *)compValue, sizeof(int));
-        memcpy(&keyLen, (char *)compKey, sizeof(int));
-        char *value = (char *)malloc(valueLen+1);
-        char *key = (char *)malloc(keyLen+1);
-        memcpy(value, (char *)compValue+ sizeof(int), valueLen);
-        memcpy(key, (char *)compKey+ sizeof(int), keyLen);
-        value[valueLen] = '\0';
-        key[keyLen] = '\0';
-        valueStr = string(value);
-        keyStr = string(key);
-        return valueStr == keyStr;
+bool Node::compareEqual(const void *compValue, const void *compKey) {
+    bool equal;
+    switch (this->attrType) {
+        case TypeInt:
+            int valueI;
+            int keyI;
+            memcpy(&valueI, compValue, sizeof(int));
+            memcpy(&keyI, compKey, sizeof(int));
+            equal = valueI == keyI;
+            break;
+        case TypeReal:
+            float valueII;
+            float keyII;
+            memcpy(&valueII, compValue, sizeof(int));
+            memcpy(&keyII, compKey, sizeof(int));
+            equal = valueII == keyII;
+            break;
+        case TypeVarChar:
+            string valueStr;
+            string keyStr;
+            int valueLen;
+            int keyLen;
+            memcpy(&valueLen, (char *)compValue, sizeof(int));
+            memcpy(&keyLen, (char *)compKey, sizeof(int));
+            char *value = (char *)malloc(valueLen+1);
+            char *key = (char *)malloc(keyLen+1);
+            memcpy(value, (char *)compValue+ sizeof(int), valueLen);
+            memcpy(key, (char *)compKey+ sizeof(int), keyLen);
+            value[valueLen] = '\0';
+            key[keyLen] = '\0';
+            valueStr = string(value);
+            keyStr = string(key);
+            equal = valueStr == keyStr;
+            break;
     }
+    return equal;
 }
 
 int Node::compareLess(const void *compValue, const void *compKey) {
@@ -1095,9 +1090,7 @@ int Node::getNodeSize() {
     offset += sizeof(this->nodeType);
     offset += 3 * sizeof(int);
     for(int i = 0; i < this->keys.size(); i ++) {
-        if(this->attrType == TypeInt) {
-            offset += sizeof(int);
-        } else if(this->attrType == TypeReal) {
+        if(this->attrType == TypeInt || this->attrType == TypeReal) {
             offset += sizeof(int);
         } else {
             int length;
@@ -1135,11 +1128,9 @@ int Node::calHeaderSize() {
     offset += sizeof(int);
     int nKeys = this->keys.size();
     for(int i = 0; i < nKeys; i ++) {
-        if(this->attrType == TypeInt) {
+        if(this->attrType == TypeInt || this->attrType == TypeReal) {
             offset += sizeof(int);
-        } else if(this->attrType == TypeReal) {
-            offset += sizeof(int);
-        }else {
+        } else {
             int length;
             memcpy(&length, (char *)this->keys[i], sizeof(int));
             offset += (sizeof(int) + length);
