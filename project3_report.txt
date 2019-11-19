@@ -1,38 +1,71 @@
 1. Basic information
-Team number (e.g., 01) : 
-#1 Student ID : 
-#1 Student Name : 
-#2 Student ID : 
-#2 Student Name : 
-OS (bit) :
-gcc version :
+Team number (e.g., 01) : 07
+#1 Student ID : szeng5
+#1 Student Name : Shi Zeng
+#2 Student ID : mengqw3
+#2 Student Name : Mengqi Wang
+OS (bit) : 64-bit
+gcc version : 5.4.0
 
 
 2. Meta-data page in an index file
 - Show your meta-data page of an index design if you have any. 
 
+We do not implement a meta-data page for an index file.
 
 3. Index Entry Format
 - Show your index entry design (structure). 
+
+We use an abstract node to represent an index entry.
+A node has the following attributes:
+    nodeType, previous node page number, next node page number, a list of key, a list of child node, a list of lists of rids corresponding to each key, overflow page number
+The node have 4 different types: RootLeaf, Leaf, Root, Intermediate.
+RootLeaf - a single node, corresponding top one layer situation
+Leaf - the leaf of b+ tree
+Both RootLeaf & Leaf have no children node and have a list of lists of rids.
+Root - the root of a tree when there is more than one layers
+Intermediate - the node neither the root nor the leaf when there are more than 2 layers
+Both root and Intermediate node have no list of lists of rids but a list of children node.
+
+The previous & next node page number are used for Leaf nodes to implement a linked list structure for scan adn search operations.
+For other types of nodes, they are set to -1.
+
+The overflow page number is used to indicate the number of the overflow page is there is any for both RootLeaf and Leaf nodes. For other types of nodes,
+it is set to -1.
 
 
 4. Page Format
 - Show your internal-page (non-leaf node) design.
 
-- Show your leaf-page (leaf node) design.
+nodeType|previousNodePageNumber|nextNodePageNumber|numberOfKeys|key0|...|keyN-1|numberOfChildren|childPage0|...|childPageN-1|overflowPageNumber|
+4byte   |      4byte           |     -1 4byte     |4byte       |4   |...|4     |4               |4         |...|4           |   4byte          |
 
+- Show your leaf-page (leaf node) design.
+nodeType|previousNodePageNumber|nextNodePageNumber|numberOfKeys|key0|...|keyN-1|numberOfListOfRids|numberOfRidsForKey0|rid00|...|rid0N|overflowPageNumber|
+4       |4                     |4                 |4           |4   |...|4     |4                 |       4           |  8  |...|  8  |   4              |
 
 5. Implementation Detail
 - Have you added your own source file (.cc or .h)?
 
+No.
+
 - Have you implemented non-lazy deletion? Choose Yes or No: 
+
+No.
 
 - Have you implemented duplicated key handling that can span multiple pages? Choose Yes or No: 
   If yes, please explain briefly how you have implemented this feature.
 
+Yes. Our implementation supports rids sharing a single key span multiple pages by appending overflow pages to leaf node.
+At the end of each leaf node page, we use an int to record the first overflow page number as a pointer to retrieve this page.
+If the int equals -1, then there is no overflow page for this leaf node. If the int is larger than 0, then there is an overflow page appended to this leaf node.
+Within each overflow page, we use an int at the beginning of this page to record the number of rids within this page.
+The body of an overflow page is a list of pageNum and slotNum for each rid.
+At the end, we use an int to record the next overflow page number if there is any, otherwise it is set to -1.
+
 - Other implementation details:
 
+NULL.
 
 6. Other (optional)
 - Freely use this section to tell us about things that are related to the project 3, but not related to the other sections (optional)
-

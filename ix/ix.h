@@ -50,7 +50,7 @@ public:
 
     // Print the B+ tree in pre-order (in a JSON record format)
     void printBtree(IXFileHandle &ixFileHandle, const Attribute &attribute) const;
-    void printNode(IXFileHandle &ixFileHandle,  const Attribute &attribute, int &pageNum, int indent) const;
+    void printTreeElement(IXFileHandle &ixFileHandle,  const Attribute &attribute, int &pageNum, int indent) const;
 
 protected:
     IndexManager() = default;                                                   // Prevent construction
@@ -79,8 +79,8 @@ public:
     RC close();
 
     int cPage;
-    int cKey;
-    int cRec;
+    int curK;
+    int curR;
     int prevP;
     int prevK;
     int prevR;
@@ -117,7 +117,7 @@ public:
 
 };
 
-typedef enum { Root = 0, Intermediate, Leaf, RootOnly } NodeType;
+typedef enum { Root = 0, Intermediate, Leaf, RootLeaf } NodeType;
 
 class Node {
 public :
@@ -147,8 +147,8 @@ public :
     int insertKey(int &pos, const void* key);
     RC insertChild(const int &pos, int &pageNum);
     RC insertPointer(int pos, const bool &exist, const RID &rid);
-    RC printKeys();
-    RC printRids(int indent);
+    RC printNodeKeys();
+    RC printNodePointers(int indent);
     int getNodeSize();
     bool compareEqual(const void *compValue, const void *compKey);
     int compareLess(const void *compValue, const void *compKey);

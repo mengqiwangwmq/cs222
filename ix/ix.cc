@@ -20,13 +20,13 @@ RC IndexManager::openFile(const std::string &fileName, IXFileHandle &ixFileHandl
 }
 
 RC IndexManager::closeFile(IXFileHandle &ixFileHandle) {
-    pfm->closeFile(ixFileHandle.fileHandle);
+    return pfm->closeFile(ixFileHandle.fileHandle);
 }
 
 RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attribute, const void *key, const RID &rid) {
-    if(ixFileHandle.fileHandle.getNumberOfPages() == 0) {
+    if(ixFileHandle.fileHandle.getNumberOfPages() < 1) {
         Node root = Node(attribute);
-        root.nodeType = RootOnly;
+        root.nodeType = RootLeaf;
         root.cPage = 0;
         int pos = 0;
         root.insertKey(pos, key);
@@ -44,7 +44,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         Node root = Node(&attribute, page, &ixFileHandle);
         root.cPage = 0;
         free(page);
-        if(root.nodeType == RootOnly) {
+        if(root.nodeType == RootLeaf) {
             int pos;
             bool exist;
             root.locateChildPos(pos, exist, key);
@@ -92,11 +92,18 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
 RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
     Node *node = route[route.size()-1];
     if(node->nodeType == Leaf) {
-        int mid = node->keys.size()/2;
         Node newLeaf = Node(node->attribute);
         newLeaf.nodeType = Leaf;
+        void *page = malloc(PAGE_SIZE);
+        ixFileHandle.fileHandle.appendPage(page);
+        newLeaf.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
+        free(page);
+        newLeaf.next = node->next;
+        node->next = newLeaf.cPage;
+        newLeaf.previous = node->cPage;
         // TODO: add overflow pages
         // newLeaf->overFlowPages = node->overFlowPages;
+        int mid = node->keys.size()/2;
         for(int i = mid; i < node->keys.size(); i ++) {
             newLeaf.keys.push_back(node->keys[i]);
             newLeaf.pointers.push_back(node->pointers[i]);
@@ -104,25 +111,16 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         node->keys.erase(node->keys.begin()+mid, node->keys.end());
         node->pointers.erase(node->pointers.begin()+mid, node->pointers.end());
 
-        void *page = malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page);
-        newLeaf.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        free(page);
-
-        newLeaf.next = node->next;
-        node->next = newLeaf.cPage;
-        newLeaf.previous = node->cPage;
-
-        Node *parent = route[route.size()-2];
+        Node *parentNode = route[route.size()-2];
         int pos;
         bool exist;
-        parent->locateChildPos(pos, exist, newLeaf.keys[0]);
+        parentNode->locateChildPos(pos, exist, newLeaf.keys[0]);
         if(!exist) {
-            parent->insertKey(pos, newLeaf.keys[0]);
-            parent->insertChild(pos+1, newLeaf.cPage);
+            parentNode->insertKey(pos, newLeaf.keys[0]);
+            parentNode->insertChild(pos+1, newLeaf.cPage);
         } else {
             // pos + 1
-            parent->insertChild(pos, newLeaf.cPage);
+            parentNode->insertChild(pos, newLeaf.cPage);
         }
         node->serializeNode(ixFileHandle);
         newLeaf.serializeNode(ixFileHandle);
@@ -130,76 +128,59 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         delete route[route.size()-1];
         route.pop_back();
 
-        if(parent->keys.size() > 1 && parent->getNodeSize() > PAGE_SIZE) {
+        if(parentNode->keys.size() > 1 && parentNode->getNodeSize() > PAGE_SIZE) {
             split(route, ixFileHandle);
         } else {
-            parent->serializeNode(ixFileHandle);
+            parentNode->serializeNode(ixFileHandle);
         }
     } else if(node->nodeType == Intermediate) {
-        int mid = node->keys.size()/2;
-        Node new_Intermediate = Node(node->attribute);
-        new_Intermediate.nodeType = Intermediate;
+        Node newInter = Node(node->attribute);
+        newInter.nodeType = Intermediate;
+        void *page = (char *)malloc(PAGE_SIZE);
+        ixFileHandle.fileHandle.appendPage(page);
+        newInter.cPage = ixFileHandle.fileHandle.getNumberOfPages()-1;
+        free(page);
         // Strictly less than when comes to intermediate node
+        int mid = node->keys.size()/2;
         for(int i = mid+1; i < node->keys.size(); i ++) {
-            new_Intermediate.keys.push_back(node->keys[i]);
-            new_Intermediate.children.push_back(node->children[i]);
+            newInter.keys.push_back(node->keys[i]);
+            newInter.children.push_back(node->children[i]);
             if(i == node->keys.size()-1) {
-                new_Intermediate.children.push_back(node->children[i+1]);
+                newInter.children.push_back(node->children[i+1]);
             }
         }
 
-        void *page = (char *)malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page);
-        new_Intermediate.cPage = ixFileHandle.fileHandle.getNumberOfPages()-1;
-        free(page);
-
-        Node *parent = route[route.size()-2];
+        Node *parentNode = route[route.size()-2];
         int pos;
         bool exist;
-        parent->locateChildPos(pos, exist, node->keys[mid]);
+        parentNode->locateChildPos(pos, exist, node->keys[mid]);
         if(!exist) {
-            parent->insertKey(pos, node->keys[mid]);
-            parent->insertChild(pos+1, new_Intermediate.cPage);
+            parentNode->insertKey(pos, node->keys[mid]);
+            parentNode->insertChild(pos+1, newInter.cPage);
         } else {
-            parent->insertChild(pos, new_Intermediate.cPage);
+            parentNode->insertChild(pos, newInter.cPage);
         }
-        new_Intermediate.serializeNode(ixFileHandle);
+        newInter.serializeNode(ixFileHandle);
 
         node->keys.erase(node->keys.begin()+mid,node->keys.end());
         node->children.erase(node->children.begin()+mid+1, node->children.end());
         node->serializeNode(ixFileHandle);
         delete route[route.size() - 1];
         route.pop_back();
-        if((!exist || parent->keys.size() > 1) && parent->getNodeSize() > PAGE_SIZE)
+        if((!exist || parentNode->keys.size() > 1) && parentNode->getNodeSize() > PAGE_SIZE)
         {
             split(route, ixFileHandle);
         }
         else
         {
-            parent->serializeNode(ixFileHandle);
+            parentNode->serializeNode(ixFileHandle);
         }
-    } else if(node->nodeType == RootOnly) {
-        int mid = node->keys.size()/2;
+    } else if(node->nodeType == RootLeaf) {
         Node newLeaf1 = Node(node->attribute);
         Node newLeaf2 = Node(node->attribute);
         node->nodeType = Root;
         newLeaf1.nodeType = Leaf;
         newLeaf2.nodeType = Leaf;
-        for(int i = 0; i < node->keys.size(); i ++) {
-            if(i < mid) {
-                int size1 = newLeaf1.keys.size();
-                newLeaf1.insertKey(size1, node->keys[i]);
-                newLeaf1.pointers.push_back(node->pointers[i]);
-            }
-            if(i >= mid) {
-                int size2 = newLeaf2.keys.size();
-                newLeaf2.insertKey(size2, node->keys[i]);
-                newLeaf2.pointers.push_back(node->pointers[i]);
-            }
-        }
-        node->keys.erase(node->keys.begin() + mid+1,node->keys.begin() + node->keys.size());
-        node->keys.erase(node->keys.begin(),node->keys.begin() + mid);
-        node->pointers.clear();
         void *page1 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page1);
         newLeaf1.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
@@ -212,35 +193,32 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         node->children.push_back(newLeaf2.cPage);
         newLeaf1.next = newLeaf2.cPage;
         newLeaf2.previous = newLeaf1.cPage;
+        int mid = node->keys.size()/2;
+        for(int i = 0; i < node->keys.size(); i ++) {
+            if(i >= mid) {
+                int size2 = newLeaf2.keys.size();
+                newLeaf2.insertKey(size2, node->keys[i]);
+                newLeaf2.pointers.push_back(node->pointers[i]);
+            }
+            if(i < mid) {
+                int size1 = newLeaf1.keys.size();
+                newLeaf1.insertKey(size1, node->keys[i]);
+                newLeaf1.pointers.push_back(node->pointers[i]);
+            }
+        }
+        node->keys.erase(node->keys.begin() + mid+1,node->keys.begin() + node->keys.size());
+        node->keys.erase(node->keys.begin(),node->keys.begin() + mid);
+        node->pointers.clear();
+
         // TODO: consider overflow page
         node->serializeNode(ixFileHandle);
         newLeaf1.serializeNode(ixFileHandle);
         newLeaf2.serializeNode(ixFileHandle);
     }else if(node->nodeType == Root) {
-        int mid = node->keys.size()/2;
         Node newInter1 = Node(node->attribute);
         Node newInter2 = Node(node->attribute);
         newInter1.nodeType = Intermediate;
         newInter2.nodeType = Intermediate;
-        for(int i = 0; i < node->keys.size(); i ++) {
-            if(i < mid) {
-                newInter1.keys.push_back(node->keys[i]);
-            }
-            if(i > mid) {
-                newInter2.keys.push_back(node->keys[i]);
-            }
-        }
-        for(int i = 0; i < node->keys.size(); i ++) {
-            if(i < mid+1) {
-                newInter1.children.push_back(node->children[i]);
-            }
-            if(i > mid) {
-                newInter2.children.push_back(node->children[i]);
-            }
-        }
-        node->keys.erase(node->keys.begin()+mid+1, node->keys.end());
-        node->keys.erase(node->keys.begin(), node->keys.begin()+mid);
-        node->children.clear();
         void *page1 = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page1);
         newInter1.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
@@ -249,6 +227,23 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         newInter2.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         free(page1);
         free(page2);
+        int mid = node->keys.size()/2;
+        for(int i = 0; i < mid; i ++) {
+            newInter1.keys.push_back(node->keys[i]);
+            newInter1.children.push_back(node->children[i]);
+            if(i == mid-1) {
+                newInter1.children.push_back(node->children[i+1]);
+            }
+        }
+        for(int i = mid+1; i < node->keys.size(); i ++) {
+            newInter2.keys.push_back(node->keys[i]);
+            newInter2.children.push_back(node->children[i]);
+        }
+
+        node->keys.erase(node->keys.begin()+mid+1, node->keys.end());
+        node->keys.erase(node->keys.begin(), node->keys.begin()+mid);
+        node->children.clear();
+
         node->children.push_back(newInter1.cPage);
         node->children.push_back(newInter2.cPage);
         // TODO: consider overflow pages
@@ -269,7 +264,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
     Node node = Node(&attribute, page, &ixFileHandle);
     free(page);
     node.cPage = 0;
-    if(node.nodeType == RootOnly) {
+    if(node.nodeType == RootLeaf) {
         int pos;
         bool exist;
         node.locateChildPos(pos, exist, key);
@@ -309,7 +304,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
 
 RC IndexManager::constructRouteToLeaf(IXFileHandle &ixFileHandle, vector<Node*> &route, Node *root, const void *key, const Attribute &attribute) {
     route.push_back(root);
-    if(root->nodeType == Leaf) {
+    if(root->nodeType == RootLeaf || root->nodeType == Leaf) {
         return 0;
     }
     int pos;
@@ -357,25 +352,23 @@ void IndexManager::printBtree(IXFileHandle &ixFileHandle, const Attribute &attri
     }
     int pageNum = 0;
     int indent = 0;
-    printNode(ixFileHandle, attribute, pageNum, 0);
+    printTreeElement(ixFileHandle, attribute, pageNum, 0);
 }
 
-void IndexManager::printNode(IXFileHandle &ixFileHandle, const Attribute &attribute, int &pageNum, int indent) const {
+void IndexManager::printTreeElement(IXFileHandle &ixFileHandle, const Attribute &attribute, int &pageNum, int indent) const {
     void *page = (char *)malloc(PAGE_SIZE);
     ixFileHandle.fileHandle.readPage(pageNum, page);
     Node node = Node(&attribute, page, &ixFileHandle);
-    if(node.nodeType == RootOnly || node.nodeType == Leaf) {
-        printf("%*s%s", indent, "", "{\n");
-        node.printRids(indent+1);
-        printf("%*s%s", indent, "", "}");
+    if(node.nodeType == RootLeaf || node.nodeType == Leaf) {
+        node.printNodePointers(indent+1);
     } else {
         printf("%*s%s", indent, "", "{\n");
         printf("%*s%s", indent, "", "\"keys\":[");
-        node.printKeys();
+        node.printNodeKeys();
         printf("%*s%s", indent, "", "]\n");
         printf("%*s%s", indent, "", "\"children\":[\n");
         for(int i = 0; i < node.children.size(); i ++) {
-            printNode(ixFileHandle, attribute, node.children[i], indent+1);
+            printTreeElement(ixFileHandle, attribute, node.children[i], indent+1);
             if (i != node.children.size() - 1)
             {
                 printf(",");
@@ -389,7 +382,7 @@ void IndexManager::printNode(IXFileHandle &ixFileHandle, const Attribute &attrib
     return;
 }
 
-RC Node::printKeys() {
+RC Node::printNodeKeys() {
     for(int i = 0; i < this->keys.size(); i ++) {
         if(this->attrType == TypeInt) {
             int value;
@@ -411,7 +404,8 @@ RC Node::printKeys() {
     }
 }
 
-RC Node::printRids(int indent) {
+RC Node::printNodePointers(int indent) {
+    printf("%*s%s", indent, "", "{\n");
     printf("%*s", indent, "\"keys\": [");
     for(int i = 0; i < this->pointers.size(); i ++) {
         printf("\"");
@@ -448,13 +442,14 @@ RC Node::printRids(int indent) {
             printf(",");
     }
     printf("]\n");
+    printf("%*s%s", indent, "", "}");
     return 0;
 }
 
 IX_ScanIterator::IX_ScanIterator() {
     this->cPage = 0;
-    this->cKey = 0;
-    this->cRec = -1;
+    this->curK = 0;
+    this->curR = -1;
     this->prevP = -1;
     this->prevK = -1;
     this->prevR = -1;
@@ -475,57 +470,57 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         free(page);
     }
 
-    if(!(this->node->nodeType == RootOnly || this->node->nodeType == Leaf)) {
+    if(!(this->node->nodeType == RootLeaf || this->node->nodeType == Leaf)) {
         int leafPageNum = reachLeaf(this->node);
         this->cPage = leafPageNum;
 
     }
     while(1) {
-        this->cRec ++;
-        if(this->cRec >= this->node->pointers[this->cKey].size() && this->node->pointers[this->cKey].size() > 0) {
-            this->cKey ++;
-            this->cRec = 0;
+        this->curR ++;
+        if(this->curR >= this->node->pointers[this->curK].size() && this->node->pointers[this->curK].size() > 0) {
+            this->curK ++;
+            this->curR = 0;
         }
-        if(this->cKey >= this->node->keys.size() && this->node->next != -1) {
+        if(this->curK >= this->node->keys.size() && this->node->next != -1) {
             this->cPage ++;
             void *page = (char *)malloc(PAGE_SIZE);
             this->ixFileHandle->fileHandle.readPage(this->cPage, page);
             delete this->node;
             this->node = new Node(attribute, page, this->ixFileHandle);
             this->node->cPage = this->cPage;
-            this->cKey = 0;
-            this->cRec = 0;
+            this->curK = 0;
+            this->curR = 0;
             free(page);
         }
 
-        if(this->cKey >= this->node->keys.size() && this->node->next == -1) {
+        if(this->curK >= this->node->keys.size() && this->node->next == -1) {
             return IX_EOF;
         }
-        if (this->cKey >= this->node->keys.size() || this->cRec >= this->node->pointers[this->cKey].size()) {
+        if (this->curK >= this->node->keys.size() || this->curR >= this->node->pointers[this->curK].size()) {
             continue;
         }
 
         if(this->lowKey != NULL) {
-            if (!((this->lowKeyInclusive && this->node->compareLarge(node->keys[this->cKey], this->lowKey) >= 0) ||
-                  (!this->lowKeyInclusive && this->node->compareLarge(node->keys[this->cKey], this->lowKey) == 1))) {
+            if (!((this->lowKeyInclusive && this->node->compareLarge(node->keys[this->curK], this->lowKey) >= 0) ||
+                  (!this->lowKeyInclusive && this->node->compareLarge(node->keys[this->curK], this->lowKey) == 1))) {
                 continue;
             }
         }
         if(this->highKey != NULL) {
-            if (!((this->highKeyInclusive && this->node->compareLess(node->keys[this->cKey], this->highKey) >= 0) ||
-                  (!this->highKeyInclusive && this->node->compareLess(node->keys[this->cKey], this->highKey) == 1))) {
+            if (!((this->highKeyInclusive && this->node->compareLess(node->keys[this->curK], this->highKey) >= 0) ||
+                  (!this->highKeyInclusive && this->node->compareLess(node->keys[this->curK], this->highKey) == 1))) {
                 return IX_EOF;
             }
         }
-        rid.pageNum = this->node->pointers[this->cKey][this->cRec].pageNum;
-        rid.slotNum = this->node->pointers[this->cKey][this->cRec].slotNum;
+        rid.pageNum = this->node->pointers[this->curK][this->curR].pageNum;
+        rid.slotNum = this->node->pointers[this->curK][this->curR].slotNum;
         if (this->attribute->type == TypeInt || this->attribute->type == TypeReal) {
-            memcpy(key, this->node->keys[this->cKey], this->attribute->length);
+            memcpy(key, this->node->keys[this->curK], this->attribute->length);
         } else {
             int length;
-            memcpy(&length, (char *)this->node->keys[this->cKey], sizeof(int));
+            memcpy(&length, (char *)this->node->keys[this->curK], sizeof(int));
             memcpy(key, &length, sizeof(int));
-            memcpy((char *)key + sizeof(int), (char *)this->node->keys[this->cKey] + sizeof(int), length);
+            memcpy((char *)key + sizeof(int), (char *)this->node->keys[this->curK] + sizeof(int), length);
         }
         if(this->prevP == this->cPage) {
             void *page = malloc(PAGE_SIZE);
@@ -536,15 +531,15 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
             RID lastRid = this->node->pointers[this->prevK][this->prevR];
             // In this situation, the prevRid has already been deleted
             if(lastRid.pageNum != this->prevRid.pageNum || lastRid.slotNum != this->prevRid.slotNum) {
-                this->cKey = this->prevK;
-                this->cRec = this->prevR;
+                this->curK = this->prevK;
+                this->curR = this->prevR;
             }
             free(page);
         }
         this->prevRid = rid;
         this->prevP = this->cPage;
-        this->prevK = this->cKey;
-        this->prevR = this->cRec;
+        this->prevK = this->curK;
+        this->prevR = this->curR;
         break;
     }
     return 0;
@@ -552,8 +547,8 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 
 RC IX_ScanIterator::close() {
     this->cPage = 0;
-    this->cKey = 0;
-    this->cRec = -1;
+    this->curK = 0;
+    this->curR = -1;
     if(this->node != NULL) {
         delete this->node;
         this->node = NULL;
@@ -565,7 +560,7 @@ int IX_ScanIterator::reachLeaf(Node *&node) {
     int pageNum = 0;
     int pos;
     bool exist;
-    while(!(node->nodeType == RootOnly || node->nodeType == Leaf)) {
+    while(!(node->nodeType == RootLeaf || node->nodeType == Leaf)) {
         if(!this->lowKey == NULL) {
             node->locateChildPos(pos, exist, this->lowKey);
         } else {
@@ -609,15 +604,11 @@ Node::~Node() {
 Node::Node(const Attribute &attribute) {
     this->attrType = attribute.type;
     this->attribute = &attribute;
-    // NodeTyoe, previous, next, nKeys, nChildren
-    this->size = sizeof(NodeType) + 4* sizeof(int);
 }
 
 Node::Node(const Attribute *attribute) {
     this->attrType = attribute->type;
     this->attribute = attribute;
-    // NodeTyoe, previous, next, nKeys, nChildren
-    this->size = sizeof(NodeType) + 4* sizeof(int);
 }
 
 Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHandle) {
@@ -654,7 +645,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
     }
 
     // Copy rids to Node
-    if(this->nodeType == Leaf || this->nodeType == RootOnly) {
+    if(this->nodeType == Leaf || this->nodeType == RootLeaf) {
         this->cPage = 0;
         int nRids;
         memcpy(&nRids, (char *)page+offset, sizeof(int));
@@ -689,7 +680,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
     int overFlowPage;
     memcpy(&overFlowPage, (char *)page + offset, sizeof(int));
     offset += sizeof(int);
-    if (this->nodeType == RootOnly || this->nodeType == Root)
+    if (this->nodeType == RootLeaf || this->nodeType == Root)
         this->cPage = 0;
     if (overFlowPage != -1)
     {
@@ -728,7 +719,7 @@ RC Node::deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle) {
 }
 
 RC Node::serializeNode(IXFileHandle &ixfileHandle) {
-    if((this->nodeType == RootOnly || this->nodeType == Leaf) && this->keys.size() == 1 && this->getNodeSize() > PAGE_SIZE) {
+    if((this->nodeType == RootLeaf || this->nodeType == Leaf) && this->keys.size() == 1 && this->getNodeSize() > PAGE_SIZE) {
         int nRidInOP = (PAGE_SIZE - 2* sizeof(int))/(2* sizeof(int));
         int nRidInNode = (PAGE_SIZE - this->calHeaderSize())/(2* sizeof(int));
         int left = this->pointers[0].size() - nRidInNode;
@@ -833,7 +824,7 @@ RC Node::serialize(void *page) {
         }
     }
 
-    if(this->nodeType == Leaf || this->nodeType == RootOnly) {
+    if(this->nodeType == Leaf || this->nodeType == RootLeaf) {
         int nRids = this->pointers.size();
         memcpy((char *)page+offset, &nRids, sizeof(int));
         offset += sizeof(int);
@@ -873,11 +864,11 @@ int Node::serializeOverflowPage(int start, int end, void *page) {
     memcpy((char *)page+offset, &nRid, sizeof(int));
     offset += sizeof(int);
     for(int i = start; i < end; i ++) {
-        int pageNum = this->pointers[0][i].pageNum;
-        int slotNum = this->pointers[0][i].slotNum;
-        memcpy((char *)page + offset, &pageNum, sizeof(int));
+        int pNum = this->pointers[0][i].pageNum;
+        int sNum = this->pointers[0][i].slotNum;
+        memcpy((char *)page + offset, &pNum, sizeof(int));
         offset += sizeof(int);
-        memcpy((char *)page + offset, &slotNum, sizeof(int));
+        memcpy((char *)page + offset, &sNum, sizeof(int));
         offset += sizeof(int);
     }
     return offset;
@@ -1086,56 +1077,56 @@ int Node::compareLarge(const void *compValue, const void *compKey) {
 }
 
 int Node::getNodeSize() {
-    int offset = 0;
-    offset += sizeof(this->nodeType);
-    offset += 3 * sizeof(int);
+    int size = 0;
+    size += sizeof(this->nodeType);
+    size += 3 * sizeof(int);
     for(int i = 0; i < this->keys.size(); i ++) {
         if(this->attrType == TypeInt || this->attrType == TypeReal) {
-            offset += sizeof(int);
+            size += sizeof(int);
         } else {
             int length;
             memcpy(&length, (char *)this->keys[i], sizeof(int));
-            offset += sizeof(int) + length;
+            size += sizeof(int) + length;
         }
     }
 
-    if(this->nodeType == Leaf || this->nodeType == RootOnly) {
+    if(this->nodeType == Leaf || this->nodeType == RootLeaf) {
         // # of rids
-        offset += sizeof(int);
+        size += sizeof(int);
         for(int i = 0; i < this->pointers.size(); i ++) {
             // # of rid
-            offset += sizeof(int);
+            size += sizeof(int);
             for(int j = 0; j < this->pointers[i].size(); j ++) {
-                offset += 2 * sizeof(int);
+                size += 2 * sizeof(int);
             }
         }
     } else {
         // # of children
-        offset += sizeof(int);
+        size += sizeof(int);
         for(int i = 0; i < this->children.size(); i ++) {
-            offset += sizeof(int);
+            size += sizeof(int);
         }
     }
     // isOverflow
-    offset += sizeof(int);
-    this->size = offset;
-    return offset;
+    size += sizeof(int);
+    this->size = size;
+    return size;
 }
 
 int Node::calHeaderSize() {
-    int offset = 0;
-    offset += 3 * sizeof(int);
-    offset += sizeof(int);
+    int size = 0;
+    size += 3 * sizeof(int);
+    size += sizeof(int);
     int nKeys = this->keys.size();
     for(int i = 0; i < nKeys; i ++) {
         if(this->attrType == TypeInt || this->attrType == TypeReal) {
-            offset += sizeof(int);
+            size += sizeof(int);
         } else {
             int length;
             memcpy(&length, (char *)this->keys[i], sizeof(int));
-            offset += (sizeof(int) + length);
+            size += (sizeof(int) + length);
         }
     }
-    offset += 2*sizeof(int);
-    return offset;
+    size += 2*sizeof(int);
+    return size;
 }
