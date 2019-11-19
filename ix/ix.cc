@@ -31,8 +31,8 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
         int pos = 0;
         root.insertKey(pos, key);
         vector<RID> rids;
-        rids.push_back(rid);
-        root.pointers.push_back(rids);
+        rids.emplace_back(rid);
+        root.pointers.emplace_back(rids);
         void *page = malloc(PAGE_SIZE);
         ixFileHandle.fileHandle.appendPage(page);
         free(page);
@@ -55,7 +55,7 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
                 root.insertPointer(pos-1, exist, rid);
             }
             vector<Node*> route;
-            route.push_back(&root);
+            route.emplace_back(&root);
 
             if((!exist || root.keys.size() > 1) && root.getNodeSize() > PAGE_SIZE) {
                 split(route, ixFileHandle);
@@ -105,8 +105,8 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         // newLeaf->overFlowPages = node->overFlowPages;
         int mid = node->keys.size()/2;
         for(int i = mid; i < node->keys.size(); i ++) {
-            newLeaf.keys.push_back(node->keys[i]);
-            newLeaf.pointers.push_back(node->pointers[i]);
+            newLeaf.keys.emplace_back(node->keys[i]);
+            newLeaf.pointers.emplace_back(node->pointers[i]);
         }
         node->keys.erase(node->keys.begin()+mid, node->keys.end());
         node->pointers.erase(node->pointers.begin()+mid, node->pointers.end());
@@ -143,10 +143,10 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         // Strictly less than when comes to intermediate node
         int mid = node->keys.size()/2;
         for(int i = mid+1; i < node->keys.size(); i ++) {
-            newInter.keys.push_back(node->keys[i]);
-            newInter.children.push_back(node->children[i]);
+            newInter.keys.emplace_back(node->keys[i]);
+            newInter.children.emplace_back(node->children[i]);
             if(i == node->keys.size()-1) {
-                newInter.children.push_back(node->children[i+1]);
+                newInter.children.emplace_back(node->children[i+1]);
             }
         }
 
@@ -189,8 +189,8 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         newLeaf2.cPage = ixFileHandle.fileHandle.getNumberOfPages() - 1;
         free(page1);
         free(page2);
-        node->children.push_back(newLeaf1.cPage);
-        node->children.push_back(newLeaf2.cPage);
+        node->children.emplace_back(newLeaf1.cPage);
+        node->children.emplace_back(newLeaf2.cPage);
         newLeaf1.next = newLeaf2.cPage;
         newLeaf2.previous = newLeaf1.cPage;
         int mid = node->keys.size()/2;
@@ -198,12 +198,12 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
             if(i >= mid) {
                 int size2 = newLeaf2.keys.size();
                 newLeaf2.insertKey(size2, node->keys[i]);
-                newLeaf2.pointers.push_back(node->pointers[i]);
+                newLeaf2.pointers.emplace_back(node->pointers[i]);
             }
             if(i < mid) {
                 int size1 = newLeaf1.keys.size();
                 newLeaf1.insertKey(size1, node->keys[i]);
-                newLeaf1.pointers.push_back(node->pointers[i]);
+                newLeaf1.pointers.emplace_back(node->pointers[i]);
             }
         }
         node->keys.erase(node->keys.begin() + mid+1,node->keys.begin() + node->keys.size());
@@ -229,23 +229,23 @@ RC IndexManager::split(vector<Node*> &route, IXFileHandle &ixFileHandle) {
         free(page2);
         int mid = node->keys.size()/2;
         for(int i = 0; i < mid; i ++) {
-            newInter1.keys.push_back(node->keys[i]);
-            newInter1.children.push_back(node->children[i]);
+            newInter1.keys.emplace_back(node->keys[i]);
+            newInter1.children.emplace_back(node->children[i]);
             if(i == mid-1) {
-                newInter1.children.push_back(node->children[i+1]);
+                newInter1.children.emplace_back(node->children[i+1]);
             }
         }
         for(int i = mid+1; i < node->keys.size(); i ++) {
-            newInter2.keys.push_back(node->keys[i]);
-            newInter2.children.push_back(node->children[i]);
+            newInter2.keys.emplace_back(node->keys[i]);
+            newInter2.children.emplace_back(node->children[i]);
         }
 
         node->keys.erase(node->keys.begin()+mid+1, node->keys.end());
         node->keys.erase(node->keys.begin(), node->keys.begin()+mid);
         node->children.clear();
 
-        node->children.push_back(newInter1.cPage);
-        node->children.push_back(newInter2.cPage);
+        node->children.emplace_back(newInter1.cPage);
+        node->children.emplace_back(newInter2.cPage);
         // TODO: consider overflow pages
         node->serializeNode(ixFileHandle);
         newInter1.serializeNode(ixFileHandle);
@@ -303,7 +303,7 @@ RC IndexManager::deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
 }
 
 RC IndexManager::constructRouteToLeaf(IXFileHandle &ixFileHandle, vector<Node*> &route, Node *root, const void *key, const Attribute &attribute) {
-    route.push_back(root);
+    route.emplace_back(root);
     if(root->nodeType == RootLeaf || root->nodeType == Leaf) {
         return 0;
     }
@@ -631,7 +631,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             void *value = malloc(attribute->length);
             memcpy(value, (char *)page+offset, sizeof(int));
             offset += attribute->length;
-            this->keys.push_back(value);
+            this->keys.emplace_back(value);
         } else if(this->attrType == TypeVarChar) {
             int length;
             memcpy(&length, (char *)page+offset, sizeof(int));
@@ -640,7 +640,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             memcpy(value, &length, sizeof(int));
             memcpy((char *)value+sizeof(int), (char *)page+offset, length);
             offset += length;
-            this->keys.push_back(value);
+            this->keys.emplace_back(value);
         }
     }
 
@@ -661,9 +661,9 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
                 offset += sizeof(int);
                 memcpy(&rid.slotNum, (char *)page+offset, sizeof(int));
                 offset += sizeof(int);
-                rids.push_back(rid);
+                rids.emplace_back(rid);
             }
-            this->pointers.push_back(rids);
+            this->pointers.emplace_back(rids);
         }
     } else {
         int nChildren;
@@ -673,7 +673,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
             int childPageNum;
             memcpy(&childPageNum, (char *)page+offset, sizeof(int));
             offset += sizeof(int);
-            this->children.push_back(childPageNum);
+            this->children.emplace_back(childPageNum);
         }
     }
 
@@ -685,7 +685,7 @@ Node::Node(const Attribute *attribute, const void *page, IXFileHandle *ixfileHan
     if (overFlowPage != -1)
     {
         this->isOverflow = true;
-        this->overFlowPages.push_back(overFlowPage);
+        this->overFlowPages.emplace_back(overFlowPage);
         this->deserializeOverflowPage(overFlowPage, ixfileHandle);
     }
 }
@@ -704,14 +704,14 @@ RC Node::deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle) {
         offset += sizeof(int);
         memcpy(&rid.slotNum, (char *)page + offset, sizeof(int));
         offset += sizeof(int);
-        this->pointers[0].push_back(rid);
+        this->pointers[0].emplace_back(rid);
     }
     int overFlowPage;
     memcpy(&overFlowPage, (char *)page + offset, sizeof(int));
     offset += sizeof(int);
     if (overFlowPage != -1)
     {
-        this->overFlowPages.push_back(overFlowPage);
+        this->overFlowPages.emplace_back(overFlowPage);
         this->deserializeOverflowPage(overFlowPage, ixfileHandle);
     }
     free(page);
@@ -734,7 +734,7 @@ RC Node::serializeNode(IXFileHandle &ixfileHandle) {
             for(int i = 0; i < nNeededPage; i ++) {
                 void *page = (char *)malloc(PAGE_SIZE);
                 ixfileHandle.fileHandle.appendPage(page);
-                this->overFlowPages.push_back(ixfileHandle.fileHandle.getNumberOfPages()-1);
+                this->overFlowPages.emplace_back(ixfileHandle.fileHandle.getNumberOfPages()-1);
                 free(page);
             }
         }
@@ -890,22 +890,22 @@ RC Node::insertKey(int &pos, const void *key) {
     if(this->keys.size() >= 1) {
         this->keys.insert(this->keys.begin()+pos, (void *)value);
     } else {
-        this->keys.push_back((void *)value);
+        this->keys.emplace_back((void *)value);
     }
 }
 
 RC Node::insertPointer(int pos, const bool &exist, const RID &rid) {
     if(!exist && this->pointers.size() >= 1) {
         vector<RID> rids;
-        rids.push_back(rid);
+        rids.emplace_back(rid);
         this->pointers.insert(this->pointers.begin()+pos, rids);
     } else if(!exist && this->pointers.size() == 0) {
         vector<RID> rids;
-        rids.push_back(rid);
-        this->pointers.push_back(rids);
+        rids.emplace_back(rid);
+        this->pointers.emplace_back(rids);
     }
     else {
-        this->pointers[pos].push_back(rid);
+        this->pointers[pos].emplace_back(rid);
     }
 }
 
