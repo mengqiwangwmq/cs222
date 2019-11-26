@@ -9,7 +9,9 @@ RelationManager &RelationManager::instance() {
 
 RelationManager::RelationManager() {
     RecordBasedFileManager &rbfm = RecordBasedFileManager::instance();
+    IndexManager &ixm = IndexManager::instance();
     _rbf_manager = &rbfm;
+    _ix_manager = &ixm;
 }
 
 RelationManager::~RelationManager() { delete _relation_manager; }
@@ -42,6 +44,11 @@ RC RelationManager::createCatalog() {
     this->insertTablesRecord(tablesDescriptor, 2, columns, columns);
     this->insertColumnsRecord(columnsDescriptor, 1, tablesDescriptor);
     this->insertColumnsRecord(columnsDescriptor, 2, columnsDescriptor);
+
+    // Create index table
+    vector<Attribute> indexDescriptor;
+    this->prepareIndexDescriptor(indexDescriptor);
+    this->createTable("Index", indexDescriptor);
     return 0;
 }
 
@@ -91,6 +98,19 @@ void RelationManager::prepareColumnsDescriptor(std::vector<Attribute> &columnsDe
     columnsDescriptor.push_back(attr);
 }
 
+void RelationManager::prepareIndexDescriptor(vector<Attribute> &indexDescriptor) {
+    Attribute attr;
+    attr.name = "table-id";
+    attr.type = TypeInt;
+    attr.length = 4;
+    indexDescriptor.push_back(attr);
+
+    attr.name = "index-file-name";
+    attr.type = TypeVarChar;
+    attr.length = 50;
+    indexDescriptor.push_back(attr);
+}
+
 void RelationManager::prepareTablesRecord(int fieldCount, void *data, int table_id,
                                           const string &table_name, const string &file_name) {
     int nullFlagSize = this->_rbf_manager->getNullFlagSize(fieldCount);
@@ -133,6 +153,19 @@ void RelationManager::prepareColumnsRecord(int fieldCount, void *data, int table
     memcpy((char *) data + dataPtr, &attr.length, sizeof(int));
     dataPtr += sizeof(int);
     memcpy((char *) data + dataPtr, &attr_pos, sizeof(int));
+}
+
+void RelationManager::prepareIndexRecord(int &tableId, void *data, string &indexFileName) {
+    int offset = 0;
+    memset((char *)data+offset, 0, sizeof(char));
+    offset += 1;
+    memcpy((char *)data+offset, &tableId, sizeof(int));
+    offset += sizeof(int);
+    int length = indexFileName.size();
+    memcpy((char *)data+offset, &length, sizeof(int));
+    offset += sizeof(int);
+    memcpy((char *)data+offset, &indexFileName, length);
+    offset += length;
 }
 
 RC RelationManager::insertTablesRecord(const vector<Attribute> &tablesDescriptor, int table_id,
@@ -212,6 +245,10 @@ RC RelationManager::deleteCatalog() {
     }
     rc = _rbf_manager->destroyFile(COLUMNS);
     if (rc != 0) {
+        return rc;
+    }
+    rc = _rbf_manager->destroyFile(INDEX);
+    if(rc != 0) {
         return rc;
     }
     return 0;
@@ -331,6 +368,12 @@ RC RelationManager::getAttributes(const string &tableName, std::vector<Attribute
     return 0;
 }
 
+RC RelationManager::getAttributesName(vector<Attribute> &attributes, vector<string> &attributesName) {
+    for(int i = 0; i < attributes.size(); i ++) {
+        attributesName.push_back(attributes[i].name);
+    }
+}
+
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid) {
     FileHandle fileHandle;
     RC rc = this->_rbf_manager->openFile(tableName, fileHandle);
@@ -347,6 +390,7 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
         return rc;
     }
     this->_rbf_manager->closeFile(fileHandle);
+    updateIndexes(tableName, data, rid);
     return 0;
 }
 
@@ -531,11 +575,62 @@ RC RM_ScanIterator::close() {
 
 // QE IX related
 RC RelationManager::createIndex(const std::string &tableName, const std::string &attributeName) {
-    return -1;
+    vector<Attribute> attributes;
+    Attribute attr;
+    this->getAttributes(tableName, attributes);
+    for(int i = 0; i < attributes.size(); i ++) {
+        if(attributes[i].name == attributeName) {
+            attr = attributes[i];
+            break;
+        }
+    }
+    attributes.clear();
+    attributes.push_back(attr);
+
+    RID rid;
+    int tableId = this->getTableId(tableName, rid);
+    string indexFileName = "_" + tableName + "_" + attributeName;
+    void *data = malloc(1+2* sizeof(int)+indexFileName.size());
+    prepareIndexRecord(tableId, data, indexFileName);
+    this->insertTuple("Index", data, rid);
+    free(data);
+    _ix_manager->createFile(indexFileName);
+
+    vector<string> attr_names;
+    attr_names.push_back(attributeName);
+    data = malloc(PAGE_SIZE);
+    RM_ScanIterator rmScanIterator;
+    this->scan(tableName, "", NO_OP, nullptr, attr_names, rmScanIterator);
+    while(rmScanIterator.getNextTuple(rid, data) != RM_EOF) {
+        this->insertIndex(attributes, tableName, indexFileName, data, rid);
+    }
+    return 0;
 }
 
 RC RelationManager::destroyIndex(const std::string &tableName, const std::string &attributeName) {
-    return -1;
+    string indexName = "_" + attributeName + "_" + tableName;
+    RC rc;
+    rc = this->deleteTable(indexName);
+    if(rc != 0) {
+        return -1;
+    }
+    rc = _ix_manager->destroyFile(indexName);
+    if(rc != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+RC RelationManager::updateIndexes(const string &tableName, const void *data, const RID &rid) {
+    RID ridforTableId;
+    vector<Attribute> attributes;
+    this->getAttributes(tableName, attributes);
+    int tableId = this->getTableId(tableName, ridforTableId);
+    vector<string> indexes;
+    this->getIndexAttributeNames(tableId, indexes);
+    for(int i = 0; i < indexes.size(); i ++) {
+        this->insertIndex(attributes, tableName, indexes[i], data, rid);
+    }
 }
 
 RC RelationManager::indexScan(const std::string &tableName,
@@ -545,6 +640,101 @@ RC RelationManager::indexScan(const std::string &tableName,
                               bool lowKeyInclusive,
                               bool highKeyInclusive,
                               RM_IndexScanIterator &rm_IndexScanIterator) {
+    string indexName = "_" + attributeName + "_" + tableName;
+    IXFileHandle ixFileHandle;
+    RC rc = _ix_manager->openFile(indexName, ixFileHandle);
+    if(rc != 0) {
+        return rc;
+    }
+    int i;
+    vector<Attribute> attrs;
+    this->getAttributes(tableName, attrs);
+    for(i = 0; i < attrs.size(); i ++) {
+        if(attributeName == attrs[i].name) {
+            break;
+        }
+    }
+    _ix_manager->scan(ixFileHandle, attrs[i], lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ixScanIterator);
     return -1;
 }
 
+RC RM_IndexScanIterator::getNextEntry(RID &rid, void *key) {
+    if(this->ixScanIterator.getNextEntry(rid, key) == IX_EOF) {
+        return RM_EOF;
+    }
+    return 0;
+}
+
+RC RelationManager::getIndexAttributeNames(int tableId, vector<string> &indexAttributeNames) {
+    RID rid;
+    void *data = malloc(PAGE_SIZE);
+    vector<string> attributeNames;
+    attributeNames.push_back("index-file-name");
+    CompOp compOp = EQ_OP;
+    void *value = malloc(sizeof(int));
+    memcpy(value, &tableId, sizeof(int));
+    RM_ScanIterator rmScanIterator;
+    this->scan("Index", "table-id", compOp, value, attributeNames, rmScanIterator);
+    while(rmScanIterator.getNextTuple(rid, data) != RM_EOF) {
+        int offset = sizeof(char);
+        int length;
+        memcpy(&length, (char *)data+offset, sizeof(int));
+        offset += sizeof(int);
+        char *value = (char *)malloc(length + 1);
+        memcpy(value, (char *)data+offset, length);
+        value[length] = '\0';
+        string indexAttributeName = string(value);
+        indexAttributeNames.push_back(indexAttributeName);
+    }
+    return 0;
+}
+
+int RelationManager::getKey(vector<Attribute> &attrs, int &attrPos, const string &tableName, const string &indexFileName, void *keyData, const void *data) {
+    int offset = ceil((double)attrs.size()/CHAR_BIT);
+    int keyLength;
+    for(int i = 0; i < attrs.size(); i ++) {
+        string indexName = "_" + tableName + "_" + attrs[i].name;
+        if(indexName == indexFileName) {
+            if(attrs[i].type == TypeInt || attrs[i].type == TypeReal) {
+                memcpy(keyData, (char *)data+offset, sizeof(int));
+                offset += sizeof(int);
+                keyLength = sizeof(int);
+            } else {
+                int length;
+                memcpy(&length, (char *)data+offset, sizeof(int));
+                offset += sizeof(int);
+                offset += length;
+                keyLength = sizeof(int) + length;
+            }
+            attrPos = i;
+            return keyLength;
+        } else {
+            if(attrs[i].type == TypeInt || attrs[i].type == TypeReal) {
+                offset += sizeof(int);
+            } else {
+                int length;
+                memcpy(&length, (char *)data+offset, sizeof(int));
+                offset += sizeof(int);
+                offset += length;
+            }
+        }
+    }
+    return -1;
+}
+
+RC RelationManager::insertIndex(vector<Attribute> &attributes, const string &tableName, string &indexFileName, const void *data, const RID &rid) {
+    int attrPos;
+    void *keyData = malloc(PAGE_SIZE);
+    int keyLength = this->getKey(attributes, attrPos, tableName, indexFileName, keyData, data);
+    if(keyLength == -1) {
+        return -1;
+    }
+    void *key = malloc(keyLength);
+    memcpy(key, keyData, keyLength);
+    free(keyData);
+    IXFileHandle ixFileHandle;
+    ixFileHandle.fileHandle.openFile(indexFileName);
+    _ix_manager->insertEntry(ixFileHandle, attributes[attrPos], key, rid);
+    ixFileHandle.fileHandle.closeFile();
+    return 0;
+}

@@ -7,10 +7,12 @@
 #include <iostream>
 
 #include "../rbf/rbfm.h"
+#include "../ix/ix.h"
 
 # define RM_EOF (-1)  // end of a scan operator
 #define TABLES "Tables"
 #define COLUMNS "Columns"
+#define INDEX "Index"
 
 using namespace std;
 
@@ -33,12 +35,17 @@ public:
 // RM_IndexScanIterator is an iterator to go through index entries
 class RM_IndexScanIterator {
 public:
-    RM_IndexScanIterator() {};    // Constructor
+    RM_IndexScanIterator();    // Constructor
     ~RM_IndexScanIterator() {};    // Destructor
 
     // "key" follows the same format as in IndexManager::insertEntry()
-    RC getNextEntry(RID &rid, void *key) { return RM_EOF; };    // Get next matching entry
+    RC getNextEntry(RID &rid, void *key);    // Get next matching entry
     RC close() { return -1; };                        // Terminate index scan
+    const void *lowKey;
+    const void *highKey;
+    const bool lowKeyInclusive;
+    const bool highKeyInclusive;
+    IX_ScanIterator ixScanIterator;
 };
 
 // Relation Manager
@@ -55,6 +62,8 @@ public:
     RC deleteTable(const std::string &tableName);
 
     RC getAttributes(const std::string &tableName, std::vector<Attribute> &attrs);
+
+    RC getAttributesName(vector<Attribute> &attributes, vector<string> &attributesName);
 
     RC insertTuple(const std::string &tableName, const void *data, RID &rid);
 
@@ -90,10 +99,14 @@ public:
 
     void prepareColumnsDescriptor(vector<Attribute> &columnsDescriptor);
 
+    void prepareIndexDescriptor(vector<Attribute> &indexDescriptor);
+
     void prepareTablesRecord(int fieldCount, void *data, int table_id, const string &table_name,
                              const string &file_name);
 
     void prepareColumnsRecord(int fieldCount, void *data, int table_id, Attribute &attr, int attr_pos);
+
+    void prepareIndexRecord(int &tableId, void *data, string &indexFielName);
 
     RC insertTablesRecord(const vector<Attribute> &tablesDescriptor, int table_id,
                           const string &table_name, const string &file_name);
@@ -114,6 +127,10 @@ public:
 
     RC destroyIndex(const std::string &tableName, const std::string &attributeName);
 
+    RC updateIndexes(const string &tableName, const void *data, const RID &rid);
+
+    RC getIndexAttributeNames(int tableId, vector<string> &indexAttributeNames);
+
     // indexScan returns an iterator to allow the caller to go through qualified entries in index
     RC indexScan(const std::string &tableName,
                  const std::string &attributeName,
@@ -122,6 +139,10 @@ public:
                  bool lowKeyInclusive,
                  bool highKeyInclusive,
                  RM_IndexScanIterator &rm_IndexScanIterator);
+
+    RC insertIndex(vector<Attribute> &attributes, const string &tableName, string &indexFileName, const void *data, const RID &rid);
+
+    int getKey(vector<Attribute> &attrs, int &attrPos, const string &tableName, const string &indexFileName, void *keyData, const void *data);
 
 protected:
     RelationManager();                                                  // Prevent construction
@@ -132,6 +153,7 @@ protected:
 private:
     static RelationManager *_relation_manager;
     RecordBasedFileManager *_rbf_manager;
+    IndexManager *_ix_manager;
     int numOfTables = 0;
 };
 

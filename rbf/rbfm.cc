@@ -596,7 +596,7 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
         this->slotNum++;
         if (this->slotNum > slotTotal - 1) {
             this->pageNum++;
-            if (this->pageNum > this->fileHandle->getNumberOfPages() - 1) {
+            if ((this->pageNum - (this->fileHandle->getNumberOfPages() - 1)) > 0) {
                 free(id);
                 free(page);
                 return RBFM_EOF;
