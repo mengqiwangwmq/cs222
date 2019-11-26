@@ -167,16 +167,25 @@ public:
 class Filter : public Iterator {
     // Filter operator
 public:
+    Condition condition;
+    Iterator *input;
+    vector<Attribute> attrs;
+    vector<string> attr_names;
+
     Filter(Iterator *input,               // Iterator of input R
            const Condition &condition     // Selection condition
     );
 
     ~Filter() override = default;
 
-    RC getNextTuple(void *data) override { return QE_EOF; };
+    RC getNextTuple(void *data);
 
     // For attribute in std::vector<Attribute>, name it as rel.attr
-    void getAttributes(std::vector<Attribute> &attrs) const override {};
+    void getAttributes(std::vector<Attribute> &attrs) const override;
+
+    bool compare(void *filterValue, Value rhsValue);
+
+    int getFilterValue(void *filterValueData, void *data);
 };
 
 class Project : public Iterator {

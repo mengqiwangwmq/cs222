@@ -76,7 +76,7 @@ public:
 
     RC close();
 
-    unsigned pageNum;
+    int pageNum;
     short slotNum;
     FileHandle *fileHandle;
     vector<Attribute> recordDescriptor;

@@ -134,7 +134,7 @@ RC FileHandle::appendPage(const void *data) {
     return 0;
 }
 
-unsigned FileHandle::getNumberOfPages() {
+int FileHandle::getNumberOfPages() {
     this->fs.seekg(0, this->fs.end);
     return fs.tellg() / PAGE_SIZE - 1;
 }

@@ -428,6 +428,8 @@ RC RelationManager::updateTuple(const std::string &tableName, const void *data, 
     if (rc != 0) {
         return rc;
     }
+
+    // TODO: update index
     this->_rbf_manager->closeFile(fileHandle);
     return 0;
 }
