@@ -454,6 +454,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         }
 
         if (this->curK >= this->node->keys.size() && this->node->next == -1) {
+            free(page);
             return IX_EOF;
         }
         if (this->curK >= this->node->keys.size() || this->curR >= this->node->pointers[this->curK].size()) {
@@ -474,10 +475,12 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         if (this->highKey.length > 0) {
             if (this->highKeyInclusive) {
                 if (AttrValue::compAttr(this->node->keys[this->curK], this->highKey, GT_OP)) {
+                    free(page);
                     return IX_EOF;
                 }
             } else {
                 if (AttrValue::compAttr(this->node->keys[this->curK], this->highKey, GE_OP)) {
+                    free(page);
                     return IX_EOF;
                 }
             }
