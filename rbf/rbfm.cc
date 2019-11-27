@@ -572,6 +572,87 @@ RC RecordBasedFileManager::scan(FileHandle &fileHandle, const std::vector<Attrib
     return 0;
 }
 
+void AttrValue::readAttr(AttrType attrType, const void *data) {
+    int len = 0;
+    char *s;
+    this->type = attrType;
+    switch (this->type) {
+        case TypeVarChar:
+            memcpy(&len, data, sizeof(int));
+            s = (char *) malloc(len);
+            memset(s, 0, len);
+            memcpy(s, (char *) data + sizeof(int), len);
+            this->vchar = string(s, len);
+            this->length = sizeof(int) + len;
+            free(s);
+            break;
+        case TypeInt:
+            memcpy(&this->itg, data, sizeof(int));
+            this->length = sizeof(int);
+            break;
+        case TypeReal:
+            memcpy(&this->flt, data, sizeof(float));
+            this->length = sizeof(float);
+            break;
+        default:
+            break;
+    }
+}
+
+void AttrValue::writeAttr(void *data) {
+    int len = 0;
+    switch (this->type) {
+        case TypeVarChar:
+            len = this->length - sizeof(int);
+            memcpy(data, &len, sizeof(int));
+            memcpy((char *) data + sizeof(int), this->vchar.c_str(), this->vchar.length());
+            break;
+        case TypeInt:
+            memcpy(data, &this->itg, sizeof(int));
+            break;
+        case TypeReal:
+            memcpy(data, &this->flt, sizeof(float));
+            break;
+        default:
+            break;
+    }
+}
+
+void AttrValue::printSelf() {
+    switch (this->type) {
+        case TypeInt:
+            cout << this->itg;
+            break;
+        case TypeReal:
+            cout << this->flt;
+            break;
+        case TypeVarChar:
+            cout << this->vchar;
+        default:
+            break;
+    }
+}
+
+bool AttrValue::compareValue(AttrValue left, AttrValue right, CompOp op) {
+    assert(left.type == right.type);
+    switch (op) {
+        case EQ_OP:
+            return left == right;
+        case NE_OP:
+            return left != right;
+        case LT_OP:
+            return left < right;
+        case LE_OP:
+            return left <= right;
+        case GT_OP:
+            return left > right;
+        case GE_OP:
+            return left >= right;
+        default:
+            return true;
+    }
+}
+
 void RBFM_ScanIterator::init(FileHandle &fileHandle, const vector<Attribute> &recordDescriptor,
                              const CompOp compOp, const void *value, const vector<string> &attrNames) {
     this->fileHandle = &fileHandle;
