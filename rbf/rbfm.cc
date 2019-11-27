@@ -139,19 +139,11 @@ short RecordBasedFileManager::parseRecord(const vector<Attribute> &recordDescrip
         int bitPos = i % 8;
         bool nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         Attribute attr = recordDescriptor[i];
+        AttrValue attrValue;
         if (!nullBit) {
-            if (attr.type == TypeVarChar) {
-                int nameLength;
-                memcpy(&nameLength, (char *) data + dataPtr, sizeof(int));
-                dataPtr += sizeof(int) + nameLength;
-                attrOffset += sizeof(int) + nameLength;
-            } else if (attr.type == TypeInt) {
-                dataPtr += sizeof(int);
-                attrOffset += sizeof(int);
-            } else if (attr.type == TypeReal) {
-                dataPtr += sizeof(float);
-                attrOffset += sizeof(float);
-            }
+            attrValue.readAttr(attr.type, (char *) data + dataPtr);
+            dataPtr += attrValue.length;
+            attrOffset += attrValue.length;
         }
         memcpy((char *) offsetTable + i * sizeof(short), &attrOffset, sizeof(short));
     }
@@ -362,27 +354,12 @@ RC RecordBasedFileManager::printRecord(const vector<Attribute> &recordDescriptor
         nullBit = nullFlags[bytePos] & (unsigned) 1 << (unsigned) (7 - bitPos);
         Attribute attr = recordDescriptor[i];
         cout << attr.name << " ";
+        AttrValue attrValue;
         if (!nullBit) {
-            if (attr.type == TypeVarChar) {
-                int nameLength;
-                memcpy(&nameLength, (char *) data + dataPtr, sizeof(int));
-                dataPtr += sizeof(int);
-                char *value = (char *) malloc(nameLength);
-                memcpy(value, (char *) data + dataPtr, nameLength);
-                dataPtr += nameLength;
-                cout << string(value, nameLength) << " ";
-                free(value);
-            } else if (attr.type == TypeInt) {
-                int value;
-                memcpy(&value, (char *) data + dataPtr, attr.length);
-                dataPtr += attr.length;
-                cout << value << " ";
-            } else if (attr.type == TypeReal) {
-                float value;
-                memcpy(&value, (char *) data + dataPtr, attr.length);
-                dataPtr += attr.length;
-                cout << value << " ";
-            }
+            attrValue.readAttr(attr.type, (char *) data + dataPtr);
+            attrValue.printSelf();
+            cout << " ";
+            dataPtr += attrValue.length;
         } else {
             cout << "Null ";
         }
@@ -750,88 +727,30 @@ RC RBFM_ScanIterator::getNextRecord(RID &rid, void *data) {
 }
 
 bool RBFM_ScanIterator::checkSatisfied(void *checkValue) {
-    int v1 = 0;
-    int s1 = 0;
-    float v2 = 0;
-    float s2 = 0;
-    string v3 = "";
-    string s3 = "";
     Attribute attr = this->recordDescriptor[this->condAttrIdx];
-    if (attr.type == TypeInt) {
-        memcpy(&v1, (char *) checkValue, sizeof(int));
-        memcpy(&s1, (char *) this->value, sizeof(int));
-    } else if (attr.type == TypeReal) {
-        memcpy(&v2, (char *) checkValue, sizeof(float));
-        memcpy(&s2, (char *) this->value, sizeof(float));
-    } else if (attr.type == TypeVarChar) {
-        int checkLen;
-        memcpy(&checkLen, (char *) checkValue, sizeof(int));
-        int searchLen;
-        memcpy(&searchLen, (char *) this->value, sizeof(int));
-        char *vChar = (char *) malloc(checkLen);
-        char *sChar = (char *) malloc(searchLen);
-        memcpy(vChar, (char *) checkValue + sizeof(int), checkLen);
-        memcpy(sChar, (char *) this->value + sizeof(int), searchLen);
-        v3 = string(vChar, checkLen);
-        s3 = string(sChar, searchLen);
-        free(vChar);
-        free(sChar);
-    }
+    AttrValue v;
+    v.readAttr(attr.type, checkValue);
+    AttrValue s;
+    s.readAttr(attr.type, this->value);
     bool satisfied = false;
     switch (compOp) {
         case EQ_OP:
-            if (attr.type == TypeInt) {
-                satisfied = v1 == s1;
-            } else if (attr.type == TypeReal) {
-                satisfied = v2 == s2;
-            } else if (attr.type == TypeVarChar) {
-                satisfied = v3 == s3;
-            }
+            satisfied = v == s;
             break;
         case LT_OP:
-            if (attr.type == TypeInt) {
-                satisfied = v1 < s1;
-            } else if (attr.type == TypeReal) {
-                satisfied = v2 < s2;
-            } else if (attr.type == TypeVarChar) {
-                satisfied = v3 < s3;
-            }
+            satisfied = v < s;
             break;
         case LE_OP:
-            if (attr.type == TypeInt) {
-                satisfied = v1 <= s1;
-            } else if (attr.type == TypeReal) {
-                satisfied = v2 <= s2;
-            } else if (attr.type == TypeVarChar) {
-                satisfied = v3 <= s3;
-            }
+            satisfied = v <= s;
             break;
         case GT_OP:
-            if (attr.type == TypeInt) {
-                satisfied = v1 > s1;
-            } else if (attr.type == TypeReal) {
-                satisfied = v2 > s2;
-            } else if (attr.type == TypeVarChar) {
-                satisfied = v3 > s3;
-            }
+            satisfied = v > s;
             break;
         case GE_OP:
-            if (attr.type == TypeInt) {
-                satisfied = v1 >= s1;
-            } else if (attr.type == TypeReal) {
-                satisfied = v2 >= s2;
-            } else if (attr.type == TypeVarChar) {
-                satisfied = v3 >= s3;
-            }
+            satisfied = v >= s;
             break;
         case NE_OP:
-            if (attr.type == TypeInt) {
-                satisfied = v1 != s1;
-            } else if (attr.type == TypeReal) {
-                satisfied = v2 != s2;
-            } else if (attr.type == TypeVarChar) {
-                satisfied = v3 != s3;
-            }
+            satisfied = v != s;
             break;
         case NO_OP:
             satisfied = true;
