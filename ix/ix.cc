@@ -96,14 +96,13 @@ RC IndexManager::insertEntry(IXFileHandle &ixFileHandle, const Attribute &attrib
 
 RC IndexManager::split(vector<Node *> &route, IXFileHandle &ixFileHandle) {
     Node *node = route[route.size() - 1];
+    void *emptyPage = malloc(PAGE_SIZE);
+    memset(emptyPage, 0, PAGE_SIZE);
     if (node->nodeType == Leaf) {
         Node newLeaf = Node(node->attrType);
         newLeaf.nodeType = Leaf;
-        void *page = malloc(PAGE_SIZE);
-        memset(page, 0, PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page);
+        ixFileHandle.fileHandle.appendPage(emptyPage);
         newLeaf.pageNum = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        free(page);
         newLeaf.next = node->next;
         node->next = newLeaf.pageNum;
         newLeaf.previous = node->pageNum;
@@ -142,10 +141,8 @@ RC IndexManager::split(vector<Node *> &route, IXFileHandle &ixFileHandle) {
     } else if (node->nodeType == Intermediate) {
         Node newInter = Node(node->attrType);
         newInter.nodeType = Intermediate;
-        void *page = (char *) malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page);
+        ixFileHandle.fileHandle.appendPage(emptyPage);
         newInter.pageNum = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        free(page);
         // Strictly less than when comes to intermediate node
         int mid = node->keys.size() / 2;
         for (int i = mid + 1; i < node->keys.size(); i++) {
@@ -184,14 +181,10 @@ RC IndexManager::split(vector<Node *> &route, IXFileHandle &ixFileHandle) {
         node->nodeType = Root;
         newLeaf1.nodeType = Leaf;
         newLeaf2.nodeType = Leaf;
-        void *page1 = malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page1);
+        ixFileHandle.fileHandle.appendPage(emptyPage);
         newLeaf1.pageNum = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        void *page2 = malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page2);
+        ixFileHandle.fileHandle.appendPage(emptyPage);
         newLeaf2.pageNum = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        free(page1);
-        free(page2);
         node->children.emplace_back(newLeaf1.pageNum);
         node->children.emplace_back(newLeaf2.pageNum);
         newLeaf1.next = newLeaf2.pageNum;
@@ -222,14 +215,10 @@ RC IndexManager::split(vector<Node *> &route, IXFileHandle &ixFileHandle) {
         Node newInter2 = Node(node->attrType);
         newInter1.nodeType = Intermediate;
         newInter2.nodeType = Intermediate;
-        void *page1 = malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page1);
+        ixFileHandle.fileHandle.appendPage(emptyPage);
         newInter1.pageNum = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        void *page2 = malloc(PAGE_SIZE);
-        ixFileHandle.fileHandle.appendPage(page2);
+        ixFileHandle.fileHandle.appendPage(emptyPage);
         newInter2.pageNum = ixFileHandle.fileHandle.getNumberOfPages() - 1;
-        free(page1);
-        free(page2);
         int mid = node->keys.size() / 2;
         for (int i = 0; i < mid; i++) {
             newInter1.keys.emplace_back(node->keys[i]);
@@ -254,6 +243,7 @@ RC IndexManager::split(vector<Node *> &route, IXFileHandle &ixFileHandle) {
         newInter1.serializeNode(ixFileHandle);
         newInter2.serializeNode(ixFileHandle);
     }
+    free(emptyPage);
     return 0;
 }
 
@@ -414,7 +404,7 @@ RC Node::printNodePointers(int indent) {
             printf(",");
     }
     printf("]\n");
-    printf("%*s%s", indent, "", "}");
+    printf("%*s%s", indent, "", "}\n");
     return 0;
 }
 
