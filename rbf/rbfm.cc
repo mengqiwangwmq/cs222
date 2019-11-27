@@ -610,7 +610,7 @@ void AttrValue::printSelf() {
     }
 }
 
-bool AttrValue::compareValue(AttrValue left, AttrValue right, CompOp op) {
+bool AttrValue::compAttr(AttrValue left, AttrValue right, CompOp op) {
     assert(left.type == right.type);
     switch (op) {
         case EQ_OP:

@@ -78,7 +78,7 @@ public:
     // Terminate index scan
     RC close();
 
-    int cPage;
+    int pageNum;
     int curK;
     int curR;
     int prevP;
@@ -86,14 +86,14 @@ public:
     int prevR;
     RID prevRid;
 
-    const void *lowKey;
-    const void *highKey;
+    AttrValue lowKey;
+    AttrValue highKey;
     bool lowKeyInclusive;
     bool highKeyInclusive;
 
     IXFileHandle *ixFileHandle;
     Node *node = nullptr;
-    const Attribute *attribute;
+    AttrType attrType;
 };
 
 class IXFileHandle {
@@ -123,37 +123,32 @@ class Node {
 public :
     NodeType nodeType;
     AttrType attrType;
-    const Attribute *attribute;
-    vector<void *> keys;
+    vector<AttrValue> keys;
     vector<int> children; //pointers to children
-    vector<vector<RID>> pointers; //where the record lies
+    vector<vector<RID> > pointers; //where the record lies
     int next = -1;
     int previous = -1;
-    int cPage = -1;
-    //int order = 2;
-    bool isOverflow = false;
+    int pageNum = -1;
+    bool isOverflow;
     vector<int> overFlowPages;
     int size = 0;
 
-    Node(const Attribute *attribute, const void* page, IXFileHandle *ixfileHandle);
-    Node(const Attribute &attribute);
-    Node(const Attribute *attribute);
+    Node(AttrType type, const void *page, IXFileHandle *ixfileHandle);
+
+    Node(AttrType type);
     ~Node();
     RC serialize(void *page);
     int serializeOverflowPage(int start, int end, void* page);
     RC deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle);
-    RC insert(void* key, RID rid);
-    RC insert(void* key, int child);
-    int insertKey(int &pos, const void* key);
+
+    int insertKey(int &pos, AttrValue &keyValue);
     RC insertChild(const int &pos, int &pageNum);
     RC insertPointer(int pos, const bool &exist, const RID &rid);
     RC printNodeKeys();
     RC printNodePointers(int indent);
     int getNodeSize();
-    bool compareEqual(const void *compValue, const void *compKey);
-    int compareLess(const void *compValue, const void *compKey);
-    int compareLarge(const void *compValue, const void *compKey);
-    RC locateChildPos(int &pos, bool &exist, const void * value);
+
+    RC locateChildPos(int &pos, bool &exist, AttrValue &keyValue);
     int calHeaderSize();
     RC serializeNode(IXFileHandle &ixfileHandle);
     int deleteRecord(int pos, const RID &rid);
