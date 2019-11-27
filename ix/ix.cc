@@ -309,14 +309,10 @@ RC IndexManager::constructRouteToLeaf(IXFileHandle &ixFileHandle, vector<Node *>
     int pos;
     bool exist;
     root->locateChildPos(pos, exist, keyValue);
-    int childPageNum;
-    if (!exist) {
-        childPageNum = root->children[pos];
-    } else {
-        childPageNum = root->children[pos];
-    }
+    int childPageNum = root->children[pos];
 
     void *page = (char *) malloc(PAGE_SIZE);
+    memset(page, 0, PAGE_SIZE);
     ixFileHandle.fileHandle.readPage(childPageNum, page);
     Node *node = new Node(root->attrType, page, &ixFileHandle);
     node->pageNum = childPageNum;
@@ -357,6 +353,7 @@ void IndexManager::printBtree(IXFileHandle &ixFileHandle, const Attribute &attri
 void
 IndexManager::printTreeElement(IXFileHandle &ixFileHandle, const Attribute &attribute, int &pageNum, int indent) const {
     void *page = (char *) malloc(PAGE_SIZE);
+    memset(page, 0, PAGE_SIZE);
     ixFileHandle.fileHandle.readPage(pageNum, page);
     Node node = Node(attribute.type, page, &ixFileHandle);
     if (node.nodeType == RootLeaf || node.nodeType == Leaf) {
@@ -423,6 +420,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
     if (this->pageNum > ixFileHandle->fileHandle.getNumberOfPages() - 1) {
         return -1;
     }
+
     if (this->node == nullptr) {
         void *page = (char *) malloc(PAGE_SIZE);
         memset(page, 0, PAGE_SIZE);
@@ -437,6 +435,8 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         this->pageNum = leafPageNum;
 
     }
+    void *page = (char *) malloc(PAGE_SIZE);
+    memset(page, 0, PAGE_SIZE);
     while (true) {
         this->curR++;
         if (this->curR >= this->node->pointers[this->curK].size() && (!this->node->pointers[this->curK].empty())) {
@@ -445,14 +445,12 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         }
         if (this->curK >= this->node->keys.size() && this->node->next != -1) {
             this->pageNum++;
-            void *page = (char *) malloc(PAGE_SIZE);
             this->ixFileHandle->fileHandle.readPage(this->pageNum, page);
             delete this->node;
             this->node = new Node(this->attrType, page, this->ixFileHandle);
             this->node->pageNum = this->pageNum;
             this->curK = 0;
             this->curR = 0;
-            free(page);
         }
 
         if (this->curK >= this->node->keys.size() && this->node->next == -1) {
@@ -488,7 +486,6 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         rid.slotNum = this->node->pointers[this->curK][this->curR].slotNum;
         this->node->keys[this->curK].writeAttr(key);
         if (this->prevP == this->pageNum) {
-            void *page = malloc(PAGE_SIZE);
             ixFileHandle->fileHandle.readPage(this->pageNum, page);
             delete this->node;
             this->node = new Node(this->attrType, page, ixFileHandle);
@@ -499,7 +496,6 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
                 this->curK = this->prevK;
                 this->curR = this->prevR;
             }
-            free(page);
         }
         this->prevRid = rid;
         this->prevP = this->pageNum;
@@ -507,6 +503,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
         this->prevR = this->curR;
         break;
     }
+    free(page);
     return 0;
 }
 
@@ -525,6 +522,8 @@ int IX_ScanIterator::reachLeaf(Node *&node) {
     int cPage = 0;
     int pos;
     bool exist;
+    void *page = (char *) malloc(PAGE_SIZE);
+    memset(page, 0, PAGE_SIZE);
     while (!(node->nodeType == RootLeaf || node->nodeType == Leaf)) {
         if (this->lowKey.length > 0) {
             node->locateChildPos(pos, exist, this->lowKey);
@@ -532,13 +531,12 @@ int IX_ScanIterator::reachLeaf(Node *&node) {
             pos = 0;
         }
         cPage = node->children[pos];
-        void *page = (char *) malloc(PAGE_SIZE);
         this->ixFileHandle->fileHandle.readPage(cPage, page);
         delete node;
         node = new Node(this->attrType, page, ixFileHandle);
         node->pageNum = cPage;
-        free(page);
     }
+    free(page);
     return cPage;
 }
 
