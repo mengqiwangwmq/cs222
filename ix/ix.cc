@@ -385,7 +385,7 @@ IndexManager::printTreeElement(IXFileHandle &ixFileHandle, const Attribute &attr
             }
         }
         printf("\n");
-        printf("%*s%s", indent, "", "]}");
+        printf("%*s%s", indent, "", "]}\n");
     }
     free(page);
 }

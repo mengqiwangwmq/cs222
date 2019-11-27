@@ -553,6 +553,10 @@ void AttrValue::readAttr(AttrType attrType, const void *data) {
     int len = 0;
     char *s;
     this->type = attrType;
+    if (data == nullptr) {
+        this->length = 0;
+        return;
+    }
     switch (this->type) {
         case TypeVarChar:
             memcpy(&len, data, sizeof(int));
