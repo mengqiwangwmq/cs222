@@ -591,7 +591,7 @@ RC RelationManager::createIndex(const std::string &tableName, const std::string 
 
     RID rid;
     int tableId = this->getTableId(tableName, rid);
-    string indexFileName = "_" + tableName + "_" + attributeName;
+    string indexFileName = "_" + attributeName + "_" + tableName;
     void *data = malloc(1+2* sizeof(int)+indexFileName.size());
     prepareIndexRecord(tableId, data, indexFileName);
     this->insertTuple("Index", data, rid);
@@ -643,8 +643,7 @@ RC RelationManager::indexScan(const std::string &tableName,
                               bool highKeyInclusive,
                               RM_IndexScanIterator &rm_IndexScanIterator) {
     string indexName = "_" + attributeName + "_" + tableName;
-    IXFileHandle ixFileHandle;
-    RC rc = _ix_manager->openFile(indexName, ixFileHandle);
+    RC rc = _ix_manager->openFile(indexName, rm_IndexScanIterator.ixFileHandle);
     if(rc != 0) {
         return rc;
     }
@@ -656,7 +655,10 @@ RC RelationManager::indexScan(const std::string &tableName,
             break;
         }
     }
-    _ix_manager->scan(ixFileHandle, attrs[i], lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ixScanIterator);
+    rm_IndexScanIterator.attribute.name = attrs[i].name;
+    rm_IndexScanIterator.attribute.type = attrs[i].type;
+    rm_IndexScanIterator.attribute.length = attrs[i].length;
+    _ix_manager->scan(rm_IndexScanIterator.ixFileHandle, rm_IndexScanIterator.attribute, lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ixScanIterator);
     return -1;
 }
 
@@ -695,7 +697,7 @@ int RelationManager::getKey(vector<Attribute> &attrs, int &attrPos, const string
     int offset = ceil((double)attrs.size()/CHAR_BIT);
     int keyLength;
     for(int i = 0; i < attrs.size(); i ++) {
-        string indexName = "_" + tableName + "_" + attrs[i].name;
+        string indexName = "_" + attrs[i].name + "_" + tableName;
         if(indexName == indexFileName) {
             if(attrs[i].type == TypeInt || attrs[i].type == TypeReal) {
                 memcpy(keyData, (char *)data+offset, sizeof(int));
