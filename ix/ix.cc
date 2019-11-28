@@ -230,6 +230,9 @@ RC IndexManager::split(vector<Node *> &route, IXFileHandle &ixFileHandle) {
         for (int i = mid + 1; i < node->keys.size(); i++) {
             newInter2.keys.emplace_back(node->keys[i]);
             newInter2.children.emplace_back(node->children[i]);
+            if (i == node->keys.size() - 1) {
+                newInter2.children.emplace_back(node->children[i + 1]);
+            }
         }
 
         node->keys.erase(node->keys.begin() + mid + 1, node->keys.end());
