@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cmath>
 #include <cstring>
+#include <cassert>
 
 #include "pfm.h"
 
@@ -48,6 +49,47 @@ typedef enum {
 ********************************************************************/
 
 # define RBFM_EOF (-1)  // end of a scan operator
+
+class AttrValue {
+public:
+    AttrType type;
+    int length;
+    string vchar;
+    int itg;
+    float flt;
+
+    AttrValue(int v) : type(TypeInt), length(sizeof(int)), vchar(""), itg(v), flt(0) {}
+
+    AttrValue(float v) : type(TypeReal), length(sizeof(float)), vchar(""), itg(0), flt(v) {}
+
+    AttrValue(string v) : type(TypeVarChar), length(sizeof(int) + (int) v.length()), vchar(v), itg(0), flt(0) {}
+
+    AttrValue() : length(0), vchar(""), itg(0), flt(0) {}
+
+    void readAttr(AttrType attrType, const void *data);
+
+    void writeAttr(void *data);
+
+    static bool compareValue(AttrValue left, AttrValue right, CompOp op);
+
+    void printSelf();
+};
+
+inline bool operator==(const AttrValue &lhs, const AttrValue &rhs) {
+    return lhs.flt == rhs.flt && lhs.itg == rhs.itg && lhs.vchar == rhs.vchar;
+}
+
+inline bool operator!=(const AttrValue &left, const AttrValue &right) { return !operator==(left, right); }
+
+inline bool operator<(const AttrValue &left, const AttrValue &right) {
+    return left.flt < right.flt || left.itg < right.itg || left.vchar < right.vchar ||
+           (left.length == 0 && right.length != 0);
+} // length = 0 means -inifinity
+inline bool operator>(const AttrValue &left, const AttrValue &right) { return operator<(right, left); }
+
+inline bool operator<=(const AttrValue &left, const AttrValue &right) { return !operator>(left, right); }
+
+inline bool operator>=(const AttrValue &left, const AttrValue &right) { return !operator<(left, right); }
 
 // RBFM_ScanIterator is an iterator to go through records
 // The way to use it is like the following:
