@@ -29,6 +29,16 @@ struct Condition {
     Value rhsValue;             // right-hand side value if bRhsIsAttr = FALSE
 };
 
+int getAttrValue(vector<Attribute> attrs, string attrName, void *filterValue, void *data);
+
+bool compareAttr(Attribute &attrL, Attribute &attrR);
+
+void integrateJoinResult(void *valueL, void *valueR, void *result, vector<Attribute> &leftAttrs, vector<Attribute> &rightAttrs);
+
+void copyAttribute(void *des, void *srs, int &desOffset, int &srsOffset,  Attribute &attr);
+
+void getOriginalAttrName(string &name);
+
 class Iterator {
     // All the relational operators and access methods are iterators.
 public:
@@ -97,6 +107,13 @@ public:
 
     ~TableScan() override {
         iter->close();
+    };
+
+    void reset() {
+        iter->close();
+        delete iter;
+        iter = new RM_ScanIterator;
+        rm.scan(tableName, "", NO_OP, NULL, attrNames, *iter);
     };
 };
 
@@ -170,7 +187,6 @@ public:
     Condition condition;
     Iterator *input;
     vector<Attribute> attrs;
-    vector<string> attr_names;
 
     Filter(Iterator *input,               // Iterator of input R
            const Condition &condition     // Selection condition
@@ -184,39 +200,65 @@ public:
     void getAttributes(std::vector<Attribute> &attrs) const override;
 
     bool compare(void *filterValue, Value rhsValue);
-
-    int getFilterValue(void *filterValueData, void *data);
 };
 
 class Project : public Iterator {
     // Projection operator
 public:
+    Iterator *input;
+    vector<Attribute> attrs;
+    vector<Attribute> projectAttrs;
+
     Project(Iterator *input,                    // Iterator of input R
-            const std::vector<std::string> &attrNames) {};   // std::vector containing attribute names
+            const std::vector<std::string> &attrNames);   // std::vector containing attribute names
     ~Project() override = default;
 
-    RC getNextTuple(void *data) override { return QE_EOF; };
+    RC getNextTuple(void *data) override;
+
+    int getProjectValue(void *projectDataValue, void *page);
 
     // For attribute in std::vector<Attribute>, name it as rel.attr
-    void getAttributes(std::vector<Attribute> &attrs) const override {};
+    void getAttributes(std::vector<Attribute> &attrs) const override;
 };
 
 class BNLJoin : public Iterator {
     // Block nested-loop join operator
 public:
+    Iterator *leftIn;
+    TableScan *rightIn;
+    Condition condition;
+    unsigned numPages;
+    bool BlockLoaded;
+    void *block;
+    int blockPtr;
+    void *leftTuple;
+    void *rightTuple;
+    vector<Attribute> leftAttrs;
+    vector<Attribute> rightAttrs;
+    RecordBasedFileManager *rbfm;
+    vector<int> tupleOffsets;
+    int count;
+    bool invalid;
+
     BNLJoin(Iterator *leftIn,            // Iterator of input R
             TableScan *rightIn,           // TableScan Iterator of input S
             const Condition &condition,   // Join condition
             const unsigned numPages       // # of pages that can be loaded into memory,
             //   i.e., memory block size (decided by the optimizer)
-    ) {};
+    );
 
     ~BNLJoin() override = default;;
 
-    RC getNextTuple(void *data) override { return QE_EOF; };
+    RC getNextBlock();
+
+    int getLeftTupleSize(void *page);
+
+    RC getNextTuple(void *data) override;
+
+    bool isEqual();
 
     // For attribute in std::vector<Attribute>, name it as rel.attr
-    void getAttributes(std::vector<Attribute> &attrs) const override {};
+    void getAttributes(std::vector<Attribute> &attrs) const override;
 };
 
 class INLJoin : public Iterator {
