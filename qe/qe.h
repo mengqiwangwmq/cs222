@@ -247,7 +247,7 @@ public:
             //   i.e., memory block size (decided by the optimizer)
     );
 
-    ~BNLJoin() override = default;;
+    ~BNLJoin() override;
 
     RC getNextBlock();
 
@@ -264,14 +264,25 @@ public:
 class INLJoin : public Iterator {
     // Index nested-loop join operator
 public:
+    Iterator *leftIn;
+    IndexScan *rightIn;
+    Condition condition;
+    vector<Attribute> leftAttrs;
+    vector<Attribute> rightAttrs;
+    bool leftLoaded;
+    void *leftTuple;
+    void *leftKey;
+    void *rightTuple;
+    RID rid;
+
     INLJoin(Iterator *leftIn,           // Iterator of input R
             IndexScan *rightIn,          // IndexScan Iterator of input S
             const Condition &condition   // Join condition
-    ) {};
+    );
 
-    ~INLJoin() override = default;
+    ~INLJoin() override;
 
-    RC getNextTuple(void *data) override { return QE_EOF; };
+    RC getNextTuple(void *data) override;
 
     // For attribute in std::vector<Attribute>, name it as rel.attr
     void getAttributes(std::vector<Attribute> &attrs) const override {};

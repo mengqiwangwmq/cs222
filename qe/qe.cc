@@ -159,9 +159,9 @@ Project::Project(Iterator *input, const std::vector<std::string> &attrNames) {
 }
 
 void Project::getAttributes(std::vector<Attribute> &attrs) const {
-    attrs = this->attrs;
-    for(int i = 0; i < this->attrs.size(); i ++) {
-        string attrName = "Project." + this->attrs[i].name;
+    attrs = this->projectAttrs;
+    for(int i = 0; i < this->projectAttrs.size(); i ++) {
+        string attrName = "Project." + this->projectAttrs[i].name;
         attrs[i].name = attrName;
     }
 }
@@ -247,6 +247,12 @@ BNLJoin::BNLJoin(Iterator *leftIn, TableScan *rightIn, const Condition &conditio
     for(int i = 0; i < this->rightAttrs.size(); i ++) {
         getOriginalAttrName(this->rightAttrs[i].name);
     }
+}
+
+BNLJoin::~BNLJoin() {
+    free(leftTuple);
+    free(rightTuple);
+    free(block);
 }
 
 void BNLJoin::getAttributes(std::vector<Attribute> &attrs) const {
@@ -360,6 +366,62 @@ bool BNLJoin::isEqual() {
         return node.compareEqual(valueL, valueR);
     }
     return false;
+}
+
+INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &condition) {
+    this->leftIn = leftIn;
+    this->rightIn = rightIn;
+    this->condition = condition;
+    leftIn->getAttributes(this->leftAttrs);
+    rightIn->getAttributes(this->rightAttrs);
+    this->leftLoaded = false;
+    for(int i = 0; i < this->leftAttrs.size(); i ++) {
+        getOriginalAttrName(this->leftAttrs[i].name);
+    }
+    for(int i = 0; i < this->rightAttrs.size(); i ++) {
+        getOriginalAttrName(this->rightAttrs[i].name);
+    }
+}
+
+INLJoin::~INLJoin() {
+    if(leftLoaded) {
+        free(leftTuple);
+        free(leftKey);
+    }
+
+}
+
+RC INLJoin::getNextTuple(void *data) {
+    while(true) {
+        if(!leftLoaded) {
+            leftLoaded = true;
+            leftTuple = malloc(PAGE_SIZE);
+            leftKey = malloc(PAGE_SIZE);
+            if(this->leftIn->getNextTuple(leftTuple) != QE_EOF) {
+                int pos = getAttrValue(this->leftAttrs, this->condition.lhsAttr, leftKey, leftTuple);
+                if(pos == -1) {
+                    return -1;
+                }
+                this->rightIn->setIterator(leftKey, leftKey, true, true);
+            }
+        }
+        rightTuple = malloc(PAGE_SIZE);
+        if(this->rightIn->getNextTuple(rightTuple) != QE_EOF) {
+            integrateJoinResult(leftTuple, rightTuple, data, leftAttrs, rightAttrs);
+            free(rightTuple);
+            return 0;
+        }
+        if(this->leftIn->getNextTuple(leftTuple) != QE_EOF) {
+            int pos = getAttrValue(leftAttrs, this->condition.lhsAttr, leftKey, leftTuple);
+            if(pos == -1) {
+                return -1;
+            }
+            this->rightIn->setIterator(leftKey, leftKey, true, true);
+            continue;
+        }
+        free(rightTuple);
+        return QE_EOF;
+    }
 }
 
 bool compareAttr(Attribute &attrL, Attribute &attrR) {
