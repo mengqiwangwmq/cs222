@@ -164,7 +164,7 @@ void RelationManager::prepareIndexRecord(int &tableId, void *data, string &index
     int length = indexFileName.size();
     memcpy((char *)data+offset, &length, sizeof(int));
     offset += sizeof(int);
-    memcpy((char *)data+offset, &indexFileName, length);
+    memcpy((char *)data+offset, indexFileName.c_str(), length);
     offset += length;
 }
 
@@ -389,8 +389,8 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     if (rc != 0) {
         return rc;
     }
-    this->_rbf_manager->closeFile(fileHandle);
     updateIndexes(tableName, data, rid);
+    this->_rbf_manager->closeFile(fileHandle);
     return 0;
 }
 
