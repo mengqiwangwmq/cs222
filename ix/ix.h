@@ -33,11 +33,19 @@ public:
 
     // Insert an entry into the given index that is indicated by the given ixFileHandle.
     RC insertEntry(IXFileHandle &ixFileHandle, const Attribute &attribute, const void *key, const RID &rid);
-    RC split(vector<Node*> &route, IXFileHandle &ixFileHandle);
-    RC constructRouteToLeaf(IXFileHandle &ixFileHandle, vector<Node *> &route, Node *root, const void *key, const Attribute &attribute);
+
+    RC split(IXFileHandle &ixFileHandle, vector<Node *> &route);
+
+    RC routeToLeaf(IXFileHandle &ixFileHandle, vector<Node *> &route, Node *root, AttrValue &attrValue);
 
     // Delete an entry from the given index that is indicated by the given ixFileHandle.
     RC deleteEntry(IXFileHandle &ixFileHandle, const Attribute &attribute, const void *key, const RID &rid);
+
+    RC checkMerge(IXFileHandle &ixFileHandle, vector<Node *> &route);
+
+    RC merge(IXFileHandle &ixFileHandle, Node *sibNode, vector<Node *> &route, int &pos, int &siblingType);
+
+    RC borrow(IXFileHandle &ixFileHandle, Node *node, Node *sibNode, Node *parent, int &pos, int &siblingType);
 
     // Initialize and IX_ScanIterator to support a range search
     RC scan(IXFileHandle &ixFileHandle,
@@ -50,7 +58,8 @@ public:
 
     // Print the B+ tree in pre-order (in a JSON record format)
     void printBtree(IXFileHandle &ixFileHandle, const Attribute &attribute) const;
-    void printTreeElement(IXFileHandle &ixFileHandle,  const Attribute &attribute, int &pageNum, int indent) const;
+
+    void printTreeNode(IXFileHandle &ixFileHandle, const Attribute &attribute, int &pageNum, int indent) const;
 
 protected:
     IndexManager() = default;                                                   // Prevent construction
@@ -67,13 +76,13 @@ public:
     IX_ScanIterator();
 
     // Destructor
-    ~IX_ScanIterator();
+    ~IX_ScanIterator() = default;
 
     // Get next matching entry
     RC getNextEntry(RID &rid, void *key);
 
     // Traverse to leaf node
-    int reachLeaf(Node *&node);
+    int reachLeaf();
 
     // Terminate index scan
     RC close();
@@ -117,7 +126,9 @@ public:
 
 };
 
-typedef enum { Root = 0, Intermediate, Leaf, RootLeaf } NodeType;
+typedef enum {
+    Root = 0, Intermediate, Leaf, SingleRoot
+} NodeType;
 
 class Node {
 public :
@@ -133,25 +144,38 @@ public :
     vector<int> overFlowPages;
     int size = 0;
 
-    Node(AttrType type, const void *page, IXFileHandle *ixfileHandle);
+    Node(IXFileHandle &ixFileHandle, AttrType type, const void *page);
 
     Node(AttrType type);
     ~Node();
     RC serialize(void *page);
     int serializeOverflowPage(int start, int end, void* page);
-    RC deserializeOverflowPage(int nodeId, IXFileHandle *ixfileHandle);
 
-    int insertKey(int &pos, AttrValue &keyValue);
-    RC insertChild(const int &pos, int &pageNum);
-    RC insertPointer(int pos, const bool &exist, const RID &rid);
-    RC printNodeKeys();
-    RC printNodePointers(int indent);
+    RC deserializeOverflowPage(IXFileHandle &ixFileHandle, int nodePageNum);
+
+    int locateChildPos(AttrValue &attrValue, CompOp compOp);
+
+    bool checkKeyExist(const int &pos, const AttrValue &attrValue);
+
+    void insertKey(const int &pos, const AttrValue &attrValue);
+
+    void insertChild(const int &pos, const int &pid);
+
+    void insertPointer(const int &pos, const AttrValue &attrValue, const RID &rid);
+
+    int getRightSibling(Node *parent, int &pos);
+
+    int getLeftSibling(Node *parent, int &pos);
     int getNodeSize();
 
-    RC locateChildPos(int &pos, bool &exist, AttrValue &keyValue);
-    int calHeaderSize();
-    RC serializeNode(IXFileHandle &ixfileHandle);
+    int getHeaderSize();
+
+    RC writeNode(IXFileHandle &ixFileHandle);
     int deleteRecord(int pos, const RID &rid);
+
+    RC printNodeKeys();
+
+    RC printNodePointers(int indent);
 };
 
 #endif
