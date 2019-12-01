@@ -334,4 +334,8 @@ public:
     void getAttributes(std::vector<Attribute> &attrs) const override {};
 };
 
+bool compareEqual(Attribute &attr, const void *compValue, const void *compKey);
+int compareLess(Attribute &attr, const void *compValue, const void *compKey);
+int compareLarge(Attribute &attr, const void *compValue, const void *compKey);
+
 #endif

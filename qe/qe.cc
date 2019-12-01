@@ -33,11 +33,10 @@ bool Filter::compare(void *filterValue, Value rhsValue) {
     bool satisfied = false;
     Attribute attr;
     attr.type = this->condition.rhsValue.type;
-    Node node = Node(attr);
     switch(condition.op) {
         case EQ_OP:
         {
-            bool rc = node.compareEqual(filterValue, rhsValue.data);
+            bool rc = compareEqual(attr, filterValue, rhsValue.data);
             if(rc == true) {
                 satisfied = true;
             }
@@ -45,7 +44,7 @@ bool Filter::compare(void *filterValue, Value rhsValue) {
             break;
         case LT_OP:
         {
-            int rc = node.compareLess(filterValue, rhsValue.data);
+            int rc = compareLess(attr, filterValue, rhsValue.data);
             if(rc == 1) {
                 satisfied = true;
             }
@@ -53,7 +52,7 @@ bool Filter::compare(void *filterValue, Value rhsValue) {
             break;
         case LE_OP:
         {
-            int rc = node.compareLess(filterValue, rhsValue.data);
+            int rc = compareLess(attr, filterValue, rhsValue.data);
             if(rc >= 0) {
                 satisfied = true;
             }
@@ -61,7 +60,7 @@ bool Filter::compare(void *filterValue, Value rhsValue) {
             break;
         case GT_OP:
         {
-            int rc = node.compareLarge(filterValue, rhsValue.data);
+            int rc = compareLarge(attr, filterValue, rhsValue.data);
             if(rc == 1) {
                 satisfied = true;
             }
@@ -69,7 +68,7 @@ bool Filter::compare(void *filterValue, Value rhsValue) {
             break;
         case GE_OP:
         {
-            int rc = node.compareLarge(filterValue, rhsValue.data);
+            int rc = compareLarge(attr, filterValue, rhsValue.data);
             if(rc >= 0) {
                 satisfied = true;
             }
@@ -77,7 +76,7 @@ bool Filter::compare(void *filterValue, Value rhsValue) {
             break;
         case NE_OP:
         {
-            bool rc  = node.compareEqual(filterValue, rhsValue.data);
+            bool rc  = compareEqual(attr, filterValue, rhsValue.data);
             if(rc != true) {
                 satisfied = true;
             }
@@ -362,8 +361,7 @@ bool BNLJoin::isEqual() {
         return invalid;
     }
     if(compareAttr(leftAttrs[indexL], rightAttrs[indexR])) {
-        Node node = Node(leftAttrs[indexL]);
-        return node.compareEqual(valueL, valueR);
+        return compareEqual(leftAttrs[indexL], valueL, valueR);
     }
     return false;
 }
@@ -489,5 +487,133 @@ void getOriginalAttrName(string &name) {
     int pos = name.find('.');
     string attrName = name.substr(pos+1, name.length()-pos+1);
     name = attrName;
+}
+
+bool compareEqual(Attribute &attr, const void *compValue, const void *compKey) {
+    bool equal;
+    switch (attr.type) {
+        case TypeInt:
+            int valueI;
+            int keyI;
+            memcpy(&valueI, compValue, sizeof(int));
+            memcpy(&keyI, compKey, sizeof(int));
+            equal = valueI == keyI;
+            break;
+        case TypeReal:
+            float valueII;
+            float keyII;
+            memcpy(&valueII, compValue, sizeof(int));
+            memcpy(&keyII, compKey, sizeof(int));
+            equal = valueII == keyII;
+            break;
+        case TypeVarChar:
+            string valueStr;
+            string keyStr;
+            int valueLen;
+            int keyLen;
+            memcpy(&valueLen, (char *)compValue, sizeof(int));
+            memcpy(&keyLen, (char *)compKey, sizeof(int));
+            char *value = (char *)malloc(valueLen+1);
+            char *key = (char *)malloc(keyLen+1);
+            memcpy(value, (char *)compValue+ sizeof(int), valueLen);
+            memcpy(key, (char *)compKey+ sizeof(int), keyLen);
+            value[valueLen] = '\0';
+            key[keyLen] = '\0';
+            valueStr = string(value);
+            keyStr = string(key);
+            equal = valueStr == keyStr;
+            break;
+    }
+    return equal;
+}
+
+int compareLess(Attribute &attr, const void *compValue, const void *compKey) {
+    if(attr.type == TypeInt) {
+        int value;
+        int key;
+        memcpy(&value, compValue, sizeof(int));
+        memcpy(&key, compKey, sizeof(int));
+        if(value < key) {
+            return 1;
+        } else if(value == key){
+            return 0;
+        }
+    } else if(attr.type == TypeReal) {
+        float value;
+        float key;
+        memcpy(&value, compValue, sizeof(int));
+        memcpy(&key, compKey, sizeof(int));
+        if(value < key) {
+            return 1;
+        } else if(value == key){
+            return 0;
+        }
+    } else if(attr.type == TypeVarChar) {
+        string valueStr;
+        string keyStr;
+        int valueLen;
+        int keyLen;
+        memcpy(&valueLen, (char *)compValue, sizeof(int));
+        memcpy(&keyLen, (char *)compKey, sizeof(int));
+        char *value = (char *)malloc(valueLen+1);
+        char *key = (char *)malloc(keyLen+1);
+        memcpy(value, (char *)compValue+sizeof(int), valueLen);
+        memcpy(key, (char *)compKey+ sizeof(int), keyLen);
+        value[valueLen] = '\0';
+        key[keyLen] = '\0';
+        valueStr = string(value);
+        keyStr = string(key);
+        if(valueStr < keyStr) {
+            return 1;
+        } else if(valueStr == keyStr){
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int compareLarge(Attribute &attr, const void *compValue, const void *compKey) {
+    if(attr.type == TypeInt) {
+        int value;
+        int key;
+        memcpy(&value, compValue, sizeof(int));
+        memcpy(&key, compKey, sizeof(int));
+        if(value > key) {
+            return 1;
+        } else if(value == key){
+            return 0;
+        }
+    } else if(attr.type == TypeReal) {
+        float value;
+        float key;
+        memcpy(&value, compValue, sizeof(int));
+        memcpy(&key, compKey, sizeof(int));
+        if(value > key) {
+            return 1;
+        } else if(value == key){
+            return 0;
+        }
+    } else if(attr.type == TypeVarChar) {
+        string valueStr;
+        string keyStr;
+        int valueLen;
+        int keyLen;
+        memcpy(&valueLen, (char *)compValue, sizeof(int));
+        memcpy(&keyLen, (char *)compKey, sizeof(int));
+        char *value = (char *)malloc(valueLen+1);
+        char *key = (char *)malloc(keyLen+1);
+        memcpy(value, (char *)compValue+sizeof(int), valueLen);
+        memcpy(key, (char *)compKey+ sizeof(int), keyLen);
+        value[valueLen] = '\0';
+        key[keyLen] = '\0';
+        valueStr = string(value);
+        keyStr = string(key);
+        if(valueStr > keyStr) {
+            return 1;
+        } else if(valueStr == keyStr){
+            return 0;
+        }
+    }
+    return -1;
 }
 // ... the rest of your implementations go here
