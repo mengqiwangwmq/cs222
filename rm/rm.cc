@@ -672,24 +672,21 @@ RC RM_IndexScanIterator::getNextEntry(RID &rid, void *key) {
 RC RelationManager::getIndexAttributeNames(int tableId, vector<string> &indexAttributeNames) {
     RID rid;
     void *data = malloc(PAGE_SIZE);
+    memset(data, 0, PAGE_SIZE);
     vector<string> attributeNames;
-    attributeNames.push_back("index-file-name");
+    attributeNames.emplace_back("index-file-name");
     CompOp compOp = EQ_OP;
     void *value = malloc(sizeof(int));
     memcpy(value, &tableId, sizeof(int));
     RM_ScanIterator rmScanIterator;
     this->scan("Index", "table-id", compOp, value, attributeNames, rmScanIterator);
+    AttrValue attrValue;
     while(rmScanIterator.getNextTuple(rid, data) != RM_EOF) {
-        int offset = sizeof(char);
-        int length;
-        memcpy(&length, (char *)data+offset, sizeof(int));
-        offset += sizeof(int);
-        char *value = (char *)malloc(length + 1);
-        memcpy(value, (char *)data+offset, length);
-        value[length] = '\0';
-        string indexAttributeName = string(value);
-        indexAttributeNames.push_back(indexAttributeName);
+        attrValue.readAttr(TypeVarChar, (char *) data + sizeof(char));
+        indexAttributeNames.emplace_back(attrValue.vchar);
     }
+    free(value);
+    free(data);
     return 0;
 }
 

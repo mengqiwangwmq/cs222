@@ -70,7 +70,7 @@ public:
 
     void writeAttr(void *data);
 
-    static bool compareValue(AttrValue left, AttrValue right, CompOp op);
+    static bool compAttr(AttrValue left, AttrValue right, CompOp op);
 
     void printSelf();
 };

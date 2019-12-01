@@ -553,6 +553,10 @@ void AttrValue::readAttr(AttrType attrType, const void *data) {
     int len = 0;
     char *s;
     this->type = attrType;
+    if (data == nullptr) {
+        this->length = 0;
+        return;
+    }
     switch (this->type) {
         case TypeVarChar:
             memcpy(&len, data, sizeof(int));
@@ -610,7 +614,7 @@ void AttrValue::printSelf() {
     }
 }
 
-bool AttrValue::compareValue(AttrValue left, AttrValue right, CompOp op) {
+bool AttrValue::compAttr(AttrValue left, AttrValue right, CompOp op) {
     assert(left.type == right.type);
     switch (op) {
         case EQ_OP:
