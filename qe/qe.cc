@@ -249,8 +249,6 @@ BNLJoin::BNLJoin(Iterator *leftIn, TableScan *rightIn, const Condition &conditio
 }
 
 BNLJoin::~BNLJoin() {
-    free(leftTuple);
-    free(rightTuple);
     free(block);
 }
 
@@ -315,10 +313,14 @@ RC BNLJoin::getNextTuple(void *data) {
         leftTuple = malloc(PAGE_SIZE);
         rightTuple = malloc(PAGE_SIZE);
         if(this->getNextBlock() == QE_EOF || rightIn->getNextTuple(rightTuple) == QE_EOF) {
+            free(leftTuple);
+            free(rightTuple);
             return QE_EOF;
         }
     }
     if(this->tupleOffsets.size() == 0) {
+        free(leftTuple);
+        free(rightTuple);
         return QE_EOF;
     }
 
@@ -328,6 +330,8 @@ RC BNLJoin::getNextTuple(void *data) {
             if(rightIn->getNextTuple(rightTuple) == QE_EOF) {
                 // Load next block
                 if(this->getNextBlock() == QE_EOF) {
+                    free(leftTuple);
+                    free(rightTuple);
                     return QE_EOF;
                 } else {
                     // Iterate from begin of right table
@@ -344,6 +348,8 @@ RC BNLJoin::getNextTuple(void *data) {
 
     if(invalid) {
         invalid = false;
+        free(leftTuple);
+        free(rightTuple);
         return -1;
     }
     integrateJoinResult(leftTuple, rightTuple, data, leftAttrs, rightAttrs);
@@ -358,11 +364,18 @@ bool BNLJoin::isEqual() {
     if(indexL == -1 || indexR == -1) {
         // when compare is invalid, return true to break the loop
         invalid = true;
+        free(valueL);
+        free(valueR);
         return invalid;
     }
     if(compareAttr(leftAttrs[indexL], rightAttrs[indexR])) {
-        return compareEqual(leftAttrs[indexL], valueL, valueR);
+        bool res = compareEqual(leftAttrs[indexL], valueL, valueR);
+        free(valueL);
+        free(valueR);
+        return res;
     }
+    free(valueL);
+    free(valueR);
     return false;
 }
 
@@ -382,11 +395,6 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 }
 
 INLJoin::~INLJoin() {
-    if(leftLoaded) {
-        free(leftTuple);
-        free(leftKey);
-    }
-
 }
 
 RC INLJoin::getNextTuple(void *data) {
@@ -398,6 +406,8 @@ RC INLJoin::getNextTuple(void *data) {
             if(this->leftIn->getNextTuple(leftTuple) != QE_EOF) {
                 int pos = getAttrValue(this->leftAttrs, this->condition.lhsAttr, leftKey, leftTuple);
                 if(pos == -1) {
+                    free(leftTuple);
+                    free(leftKey);
                     return -1;
                 }
                 this->rightIn->setIterator(leftKey, leftKey, true, true);
@@ -412,6 +422,8 @@ RC INLJoin::getNextTuple(void *data) {
         if(this->leftIn->getNextTuple(leftTuple) != QE_EOF) {
             int pos = getAttrValue(leftAttrs, this->condition.lhsAttr, leftKey, leftTuple);
             if(pos == -1) {
+                free(leftTuple);
+                free(leftKey);
                 return -1;
             }
             this->rightIn->setIterator(leftKey, leftKey, true, true);
@@ -522,6 +534,8 @@ bool compareEqual(Attribute &attr, const void *compValue, const void *compKey) {
             valueStr = string(value);
             keyStr = string(key);
             equal = valueStr == keyStr;
+            free(value);
+            free(key);
             break;
     }
     return equal;
@@ -564,10 +578,16 @@ int compareLess(Attribute &attr, const void *compValue, const void *compKey) {
         valueStr = string(value);
         keyStr = string(key);
         if(valueStr < keyStr) {
+            free(value);
+            free(key);
             return 1;
         } else if(valueStr == keyStr){
+            free(value);
+            free(key);
             return 0;
         }
+        free(value);
+        free(key);
     }
     return -1;
 }
@@ -609,10 +629,16 @@ int compareLarge(Attribute &attr, const void *compValue, const void *compKey) {
         valueStr = string(value);
         keyStr = string(key);
         if(valueStr > keyStr) {
+            free(value);
+            free(key);
             return 1;
         } else if(valueStr == keyStr){
+            free(value);
+            free(key);
             return 0;
         }
+        free(value);
+        free(key);
     }
     return -1;
 }
