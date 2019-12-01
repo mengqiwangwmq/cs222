@@ -285,7 +285,7 @@ public:
     RC getNextTuple(void *data) override;
 
     // For attribute in std::vector<Attribute>, name it as rel.attr
-    void getAttributes(std::vector<Attribute> &attrs) const override {};
+    void getAttributes(std::vector<Attribute> &attrs) const override;
 };
 
 // Optional for everyone. 10 extra-credit points

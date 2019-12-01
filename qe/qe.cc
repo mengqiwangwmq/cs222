@@ -288,7 +288,9 @@ RC BNLJoin::getNextBlock() {
     blockPtr = 0;
     int size = 0;
     int blockOffset = 0;
+    this->tupleOffsets.clear();
     block = malloc(numPages*PAGE_SIZE);
+    count = 0;
     int initialPos = 0;
     tupleOffsets.push_back(initialPos);
     while(leftIn->getNextTuple((char *)block+blockOffset) != RM_EOF) {
@@ -304,7 +306,7 @@ RC BNLJoin::getNextBlock() {
     if(size == 0) {
         return QE_EOF;
     }
-    count = 0;
+
     return 0;
 }
 
@@ -330,8 +332,6 @@ RC BNLJoin::getNextTuple(void *data) {
             if(rightIn->getNextTuple(rightTuple) == QE_EOF) {
                 // Load next block
                 if(this->getNextBlock() == QE_EOF) {
-                    free(leftTuple);
-                    free(rightTuple);
                     return QE_EOF;
                 } else {
                     // Iterate from begin of right table
@@ -395,6 +395,15 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 }
 
 INLJoin::~INLJoin() {
+}
+
+void INLJoin::getAttributes(std::vector<Attribute> &attrs) const {
+    for(int i = 0; i < this->leftAttrs.size(); i ++) {
+        attrs.push_back(this->leftAttrs[i]);
+    }
+    for(int i = 0; i < this->rightAttrs.size(); i ++) {
+        attrs.push_back(this->rightAttrs[i]);
+    }
 }
 
 RC INLJoin::getNextTuple(void *data) {
