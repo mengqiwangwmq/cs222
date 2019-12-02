@@ -35,9 +35,9 @@ bool compareAttr(Attribute &attrL, Attribute &attrR);
 
 void integrateJoinResult(void *valueL, void *valueR, void *result, vector<Attribute> &leftAttrs, vector<Attribute> &rightAttrs);
 
-void copyAttribute(void *des, void *srs, int &desOffset, int &srsOffset,  Attribute &attr);
+void FillAttrValue(void *des, void *srs, int &desOffset, int &srsOffset,  Attribute &attr);
 
-void getOriginalAttrName(string &name);
+void excludeTableName(string &name);
 
 class Iterator {
     // All the relational operators and access methods are iterators.

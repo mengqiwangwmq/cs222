@@ -241,10 +241,10 @@ BNLJoin::BNLJoin(Iterator *leftIn, TableScan *rightIn, const Condition &conditio
     this->invalid = false;
     this->blockPtr = 0;
     for(int i = 0; i < this->leftAttrs.size(); i ++) {
-        getOriginalAttrName(this->leftAttrs[i].name);
+        excludeTableName(this->leftAttrs[i].name);
     }
     for(int i = 0; i < this->rightAttrs.size(); i ++) {
-        getOriginalAttrName(this->rightAttrs[i].name);
+        excludeTableName(this->rightAttrs[i].name);
     }
 }
 
@@ -387,10 +387,10 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
     rightIn->getAttributes(this->rightAttrs);
     this->leftLoaded = false;
     for(int i = 0; i < this->leftAttrs.size(); i ++) {
-        getOriginalAttrName(this->leftAttrs[i].name);
+        excludeTableName(this->leftAttrs[i].name);
     }
     for(int i = 0; i < this->rightAttrs.size(); i ++) {
-        getOriginalAttrName(this->rightAttrs[i].name);
+        excludeTableName(this->rightAttrs[i].name);
     }
 }
 
@@ -470,7 +470,7 @@ void integrateJoinResult(void *leftTuple, void *rightTuple, void *integratedResu
                 nullIndicator[i/8] |= 1 << (7-i%8);
                 continue;
             }
-            copyAttribute(integratedResuelt, leftTuple, offset, offsetL, leftAttrs[i]);
+            FillAttrValue(integratedResuelt, leftTuple, offset, offsetL, leftAttrs[i]);
         } else {
             int index = i - leftAttrs.size();
             bool isNull = nullIndicatorR[index/8] & (1 << (7-index%8));
@@ -478,7 +478,7 @@ void integrateJoinResult(void *leftTuple, void *rightTuple, void *integratedResu
                 nullIndicator[i/8] |= 1 << (7-i%8);
                 continue;
             }
-            copyAttribute(integratedResuelt, rightTuple, offset, offsetR, rightAttrs[index]);
+            FillAttrValue(integratedResuelt, rightTuple, offset, offsetR, rightAttrs[index]);
         }
     }
     memcpy(integratedResuelt, nullIndicator, nullIndicatorSize);
@@ -487,7 +487,7 @@ void integrateJoinResult(void *leftTuple, void *rightTuple, void *integratedResu
     free(nullIndicatorR);
 }
 
-void copyAttribute(void *des, void *srs, int &desOffset, int &srsOffset,  Attribute &attr) {
+void FillAttrValue(void *des, void *srs, int &desOffset, int &srsOffset,  Attribute &attr) {
     if(attr.type == TypeInt || attr.type == TypeReal) {
         memcpy((char *)des+desOffset, (char *)srs+srsOffset, sizeof(int));
         desOffset += sizeof(int);
@@ -504,7 +504,7 @@ void copyAttribute(void *des, void *srs, int &desOffset, int &srsOffset,  Attrib
     }
 }
 
-void getOriginalAttrName(string &name) {
+void excludeTableName(string &name) {
     int pos = name.find('.');
     string attrName = name.substr(pos+1, name.length()-pos+1);
     name = attrName;
