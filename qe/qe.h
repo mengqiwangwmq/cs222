@@ -325,15 +325,15 @@ public:
     // Mandatory
     // Basic aggregation
     Aggregate(Iterator *input,          // Iterator of input R
-              const Attribute &aggAttr,        // The attribute over which we are computing an aggregate
+              Attribute aggAttr,        // The attribute over which we are computing an aggregate
               AggregateOp op            // Aggregate operation
     );
 
     // Optional for everyone: 5 extra-credit points
     // Group-based hash aggregation
     Aggregate(Iterator *input,             // Iterator of input R
-              const Attribute &aggAttr,           // The attribute over which we are computing an aggregate
-              const Attribute &groupAttr,         // The attribute over which we are grouping the tuples
+              Attribute aggAttr,           // The attribute over which we are computing an aggregate
+              Attribute groupAttr,         // The attribute over which we are grouping the tuples
               AggregateOp op              // Aggregate operation
     );
 
@@ -350,21 +350,19 @@ public:
 
     void buildAggResult();
 
-    void buildGroupAttr(AttrValue &attrValue);
-
-    RC getAttrValueByName(const void *data, vector<AttrValue> &avals, string &attributeName, AttrValue &value);
+    RC getAttrValueByName(const void *data, vector<Attribute> &attrs, string &attrName, void *value);
 
     Iterator *input;
     int current;
     bool groupOpFlag;
-    vector<AttrValue> attrVals;
+    vector<Attribute> attrs;
     AggregateOp aop;
-    AttrValue aggAttrVal;
-    AttrValue groupAttrVal;
+    Attribute aggAttr;
+    Attribute groupAttr;
     string rel;
     int mapSize;
 
-    GroupAttr groupAttr;
+    GroupAttr gpAttr;
     unordered_map<string, GroupAttr> vcharMap;
     unordered_map<float, GroupAttr> fltMap;
     unordered_map<int, GroupAttr> itgMap;

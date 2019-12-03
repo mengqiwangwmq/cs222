@@ -654,53 +654,47 @@ GroupAttr::GroupAttr() {
     this->min = numeric_limits<float>::max();
 }
 
-Aggregate::Aggregate(Iterator *input, const Attribute &aggAttr, AggregateOp op) {
+Aggregate::Aggregate(Iterator *input, Attribute aggAttr, AggregateOp op) {
     this->input = input;
     this->groupOpFlag = false;
-    vector<Attribute> attrs;
-    input->getAttributes(attrs);
-    for (int i = 0; i < attrs.size(); i++) {
-        AttrValue attrValue(attrs[i]);
-        this->attrVals.emplace_back(attrValue);
-    }
-    attrs.clear();
-    for (int i = 0; i < this->attrVals.size(); i++) {
-        int pos = this->attrVals[i].name.find('.');
-        this->rel = this->attrVals[i].name.substr(0, pos);
-        this->attrVals[i].name = this->attrVals[i].name.substr(pos + 1, this->attrVals[i].name.length() - pos + 1);
+    input->getAttributes(this->attrs);
+    this->aop = op;
+    this->aggAttr = aggAttr;
+    this->mapSize = 1;
+
+    for (int i = 0; i < this->attrs.size(); ++i) {
+        int pos = attrs[i].name.find('.');
+        string attrName = attrs[i].name.substr(pos + 1, attrs[i].name.length() - pos + 1);
+        this->rel = attrs[i].name.substr(0, pos);
+        this->attrs[i].name = attrName;
     }
     int pos = aggAttr.name.find('.');
-    this->aggAttrVal.name = aggAttr.name.substr(pos + 1, aggAttr.name.length() - pos + 1);
-    this->aggAttrVal.type = aggAttr.type;
+    this->aggAttr.name = aggAttr.name.substr(pos + 1, aggAttr.name.length() - pos + 1);
 
-    this->aop = op;
     this->buildAggResult();
 }
 
-Aggregate::Aggregate(Iterator *input, const Attribute &aggAttr, const Attribute &groupAttr, AggregateOp op) {
+Aggregate::Aggregate(Iterator *input, Attribute aggAttr, Attribute groupAttr, AggregateOp op) {
     this->input = input;
-    this->groupOpFlag = false;
-    vector<Attribute> attrs;
-    input->getAttributes(attrs);
-    for (int i = 0; i < attrs.size(); i++) {
-        AttrValue attrValue(attrs[i]);
-        this->attrVals.emplace_back(attrValue);
-    }
-    attrs.clear();
-    for (int i = 0; i < this->attrVals.size(); i++) {
-        int pos = this->attrVals[i].name.find('.');
-        this->rel = this->attrVals[i].name.substr(0, pos);
-        this->attrVals[i].name = this->attrVals[i].name.substr(pos + 1, this->attrVals[i].name.length() - pos + 1);
+    this->groupOpFlag = true;
+    input->getAttributes(this->attrs);
+    this->aop = op;
+    this->aggAttr = aggAttr;
+    this->mapSize = 1;
+
+    for (int i = 0; i < this->attrs.size(); ++i) {
+        int pos = attrs[i].name.find('.');
+        string attrName = attrs[i].name.substr(pos + 1, attrs[i].name.length() - pos + 1);
+        this->rel = attrs[i].name.substr(0, pos);
+        this->attrs[i].name = attrName;
     }
     int pos = aggAttr.name.find('.');
-    this->aggAttrVal.name = aggAttr.name.substr(pos + 1, aggAttr.name.length() - pos + 1);
-    this->aggAttrVal.type = aggAttr.type;
+    this->aggAttr.name = aggAttr.name.substr(pos + 1, aggAttr.name.length() - pos + 1);
 
+    this->groupAttr = groupAttr;
     pos = groupAttr.name.find('.');
-    this->groupAttrVal.name = groupAttr.name.substr(pos + 1, groupAttr.name.length() - pos + 1);
-    this->groupAttrVal.type = groupAttr.type;
+    this->groupAttr.name = groupAttr.name.substr(pos + 1, groupAttr.name.length() - pos + 1);
 
-    this->aop = op;
     this->buildAggResult();
 }
 
@@ -708,29 +702,130 @@ void Aggregate::buildAggResult() {
     void *data = malloc(PAGE_SIZE);
     memset(data, 0, PAGE_SIZE);
     while (this->input->getNextTuple(data) != RM_EOF) {
-        this->getAttrValueByName(data, this->attrVals, this->aggAttrVal.name, this->aggAttrVal);
-        if (this->groupOpFlag) {
-            this->getAttrValueByName(data, this->attrVals, this->groupAttrVal.name, this->groupAttrVal);
-            this->buildGroupAttr(this->groupAttrVal);
-        } else {
-            this->buildGroupAttr(this->aggAttrVal);
+        void *value = malloc(PAGE_SIZE);
+        int rc = this->getAttrValueByName(data, this->attrs, this->aggAttr.name, value);
+        if (rc != 0) {
+            free(value);
+            free(data);
+            return;
         }
+        float numeric = 0;
+        switch (this->aggAttr.type) {
+            case TypeInt: {
+                int itg;
+                memcpy(&itg, value, sizeof(int));
+                numeric = (float) itg;
+                break;
+            }
+            case TypeReal: {
+                float flt;
+                memcpy(&flt, value, sizeof(float));
+                numeric = flt;
+                break;
+            }
+            case TypeVarChar: {
+                numeric = 0;
+                break;
+            }
+        }
+        if (this->groupOpFlag) {
+            void *groupVal = malloc(PAGE_SIZE);
+            memset(groupVal, 0, PAGE_SIZE);
+            rc = this->getAttrValueByName(data, this->attrs, this->groupAttr.name, groupVal);
+            switch (this->groupAttr.type) {
+                case TypeInt: {
+                    int itg;
+                    memcpy(&itg, groupVal, sizeof(int));
+
+                    auto itgItr = this->itgMap.find(itg);
+                    if (itgItr == this->itgMap.end()) {
+                        GroupAttr gAttr;
+                        gAttr.sum += numeric;
+                        gAttr.count++;
+                        this->itgMap[itg] = gAttr;
+                    } else {
+                        itgItr->second.sum += numeric;
+                        itgItr->second.count++;
+                        itgItr->second.max = numeric > (itgItr->second.max) ? numeric : itgItr->second.max;
+                        itgItr->second.min = numeric < (itgItr->second.min) ? numeric : itgItr->second.min;
+                    }
+                    this->itgIter = this->itgMap.begin();
+                    this->mapSize = this->itgMap.size();
+                    break;
+                }
+                case TypeReal: {
+                    int flt;
+                    memcpy(&flt, groupVal, sizeof(float));
+
+                    auto fltItr = this->fltMap.find(flt);
+                    if (fltItr == this->fltMap.end()) {
+                        GroupAttr gAttr;
+                        gAttr.sum += numeric;
+                        gAttr.count++;
+                        this->fltMap[flt] = gAttr;
+                    } else {
+                        fltItr->second.sum += numeric;
+                        fltItr->second.count++;
+                        fltItr->second.max = numeric > (fltItr->second.max) ?
+                                             numeric : fltItr->second.max;
+                        fltItr->second.min = numeric < (fltItr->second.min) ?
+                                             numeric : fltItr->second.min;
+                    }
+                    this->fltIter = this->fltMap.begin();
+                    this->mapSize = this->fltMap.size();
+                    break;
+                }
+                case TypeVarChar: {
+                    int len;
+                    memcpy(&len, groupVal, sizeof(int));
+                    void *str = malloc(len);
+                    memset(str, 0, len);
+                    memcpy(str, (char *) groupVal + sizeof(int), len);
+                    string vchar = string((char *) str, len);
+                    free(str);
+                    auto vcharItr = this->vcharMap.find(vchar);
+                    if (vcharItr == this->vcharMap.end()) {
+                        GroupAttr gAttr;
+                        gAttr.sum += numeric;
+                        gAttr.count++;
+                        this->vcharMap[vchar] = gAttr;
+                    } else {
+                        vcharItr->second.sum += numeric;
+                        vcharItr->second.count++;
+                        vcharItr->second.min = numeric;
+                        vcharItr->second.max = numeric;
+                    }
+                    this->vcharIter = this->vcharMap.begin();
+                    this->mapSize = this->vcharMap.size();
+                    break;
+                }
+            }
+            free(groupVal);
+        } else {
+            this->gpAttr.count++;
+            this->gpAttr.sum += numeric;
+            this->gpAttr.max = numeric > this->gpAttr.max ?
+                               numeric : this->gpAttr.max;
+            this->gpAttr.min = numeric < this->gpAttr.min ?
+                               numeric : this->gpAttr.min;
+        }
+        free(value);
     }
     free(data);
 }
 
-RC Aggregate::getAttrValueByName(const void *data, vector<AttrValue> &avals, string &attributeName, AttrValue &value) {
+RC getAttrValueByName(const void *data, vector<Attribute> &attrs, string &attrName, void *value) {
     int pos;
-    for (pos = 0; pos < avals.size(); pos++) {
-        if (avals[pos].name == attributeName) {
+    for (pos = 0; pos < attrs.size(); pos++) {
+        if (attrs[pos].name == attrName) {
             break;
         }
     }
-    if (pos == avals.size()) {
+    if (pos == attrs.size()) {
         return -1;
     }
 
-    int fieldCount = avals.size();
+    int fieldCount = attrs.size();
     int nullFlagSize = ceil((double) fieldCount / CHAR_BIT);
     unsigned char *nullFlags = (unsigned char *) malloc(nullFlagSize);
     memset(nullFlags, 0, nullFlagSize);
@@ -752,96 +847,27 @@ RC Aggregate::getAttrValueByName(const void *data, vector<AttrValue> &avals, str
         if (nullBit) {
             continue;
         }
+
+        if (attrs[i].type == TypeVarChar) {
+            int len;
+            memcpy(&len, (char *) data + offset, sizeof(int));
+            offset += sizeof(int);
+            memcpy(value, &len, sizeof(int));
+            memcpy((char *) value + sizeof(int), (char *) data + offset, len);
+            offset += len;
+        } else if (attrs[i].type == TypeInt) {
+            memcpy(value, (char *) data + offset, sizeof(int));
+            offset += attrs[i].length;
+        } else if (attrs[i].type == TypeReal) {
+            memcpy(value, (char *) data + offset, sizeof(float));
+            offset += attrs[i].length;
+        }
         if (i == pos) {
-            value.readAttr(avals[i].type, (char *) data + offset);
             break;
         }
-        offset += avals[i].length;
     }
     free(nullFlags);
     return 0;
-}
-
-void Aggregate::buildGroupAttr(AttrValue &attrValue) {
-    switch (attrValue.type) {
-        case TypeInt: {
-            float temp;
-            temp = (float) attrValue.itg;
-            if (!this->groupOpFlag) {
-                this->groupAttr.sum += temp;
-                this->groupAttr.count++;
-                this->groupAttr.max = temp > (this->groupAttr.max) ? temp : this->groupAttr.max;
-                this->groupAttr.min = temp < (this->groupAttr.min) ? temp : this->groupAttr.min;
-                break;
-            }
-            auto itgItr = this->itgMap.find(attrValue.itg);
-            if (itgItr == this->itgMap.end()) {
-                GroupAttr gAttr;
-                gAttr.sum += temp;
-                gAttr.count++;
-                this->itgMap[attrValue.itg] = gAttr;
-            } else {
-                itgItr->second.sum += temp;
-                itgItr->second.count++;
-                itgItr->second.max = temp > (itgItr->second.max) ? temp : itgItr->second.max;
-                itgItr->second.min = temp < (itgItr->second.min) ? temp : itgItr->second.min;
-            }
-            this->itgIter = this->itgMap.begin();
-            this->mapSize = this->itgMap.size();
-            break;
-        }
-        case TypeReal: {
-            if (!this->groupOpFlag) {
-                this->groupAttr.sum += attrValue.flt;
-                this->groupAttr.count++;
-                this->groupAttr.max = attrValue.flt > (this->groupAttr.max) ?
-                                      attrValue.flt : this->groupAttr.max;
-                this->groupAttr.min = attrValue.flt < (this->groupAttr.min) ?
-                                      attrValue.flt : this->groupAttr.min;
-                break;
-            }
-            auto fltItr = this->fltMap.find(attrValue.flt);
-            if (fltItr == this->fltMap.end()) {
-                GroupAttr gAttr;
-                gAttr.sum += attrValue.flt;
-                gAttr.count++;
-                this->fltMap[attrValue.flt] = gAttr;
-            } else {
-                fltItr->second.sum += attrValue.flt;
-                fltItr->second.count++;
-                fltItr->second.max = attrValue.flt > (fltItr->second.max) ?
-                                     attrValue.flt : fltItr->second.max;
-                fltItr->second.min = attrValue.flt < (fltItr->second.min) ?
-                                     attrValue.flt : fltItr->second.min;
-            }
-            this->fltIter = this->fltMap.begin();
-            this->mapSize = this->fltMap.size();
-        }
-        case TypeVarChar: {
-            if (!this->groupOpFlag) {
-                this->groupAttr.sum += 0;
-                this->groupAttr.count++;
-                this->groupAttr.max = 0;
-                this->groupAttr.min = 0;
-                break;
-            }
-            auto vcharItr = this->vcharMap.find(attrValue.vchar);
-            if (vcharItr == this->vcharMap.end()) {
-                GroupAttr gAttr;
-                gAttr.sum += 0;
-                gAttr.count++;
-                this->vcharMap[attrValue.vchar] = gAttr;
-            } else {
-                vcharItr->second.sum += 0;
-                vcharItr->second.count++;
-                vcharItr->second.min = 0;
-                vcharItr->second.max = 0;
-            }
-            this->vcharIter = this->vcharMap.begin();
-            this->mapSize = this->vcharMap.size();
-            break;
-        }
-    }
 }
 
 RC Aggregate::getNextTuple(void *data) {
@@ -854,50 +880,54 @@ RC Aggregate::getNextTuple(void *data) {
     unsigned char *nullFlags = (unsigned char *) malloc(nullFlagSize);
     memset(nullFlags, 0, nullFlagSize);
     int offset = nullFlagSize;
-    float res;
+    float numeric;
     if (this->groupOpFlag) {
-        switch (this->groupAttrVal.type) {
+        GroupAttr gAttr;
+        switch (this->groupAttr.type) {
             case TypeInt: {
                 memcpy((char *) data + offset, &this->itgIter->first, sizeof(int));
                 offset += sizeof(int);
-                this->groupAttr = this->itgIter->second;
+                gAttr = this->itgIter->second;
                 this->itgIter++;
                 break;
             }
             case TypeReal: {
                 memcpy((char *) data + offset, &this->fltIter->first, sizeof(float));
                 offset += sizeof(float);
-                this->groupAttr = this->fltIter->second;
+                gAttr = this->fltIter->second;
                 this->fltIter++;
                 break;
             }
             case TypeVarChar: {
-                memcpy((char *) data + offset, &this->vcharIter->first, this->vcharIter->first.size());
-                offset += this->vcharIter->first.size();
-                this->groupAttr = this->vcharIter->second;
+                int len = this->vcharIter->first.length();
+                memcpy((char *) data + offset, &len, sizeof(int));
+                offset += sizeof(int);
+                memcpy((char *) data + offset, &this->vcharIter->first, len);
+                gAttr = this->vcharIter->second;
                 this->vcharIter++;
                 break;
             }
         }
+        this->gpAttr = gAttr;
     }
     switch (this->aop) {
         case MIN:
-            res = this->groupAttr.min;
+            numeric = this->gpAttr.min;
             break;
         case MAX:
-            res = this->groupAttr.max;
+            numeric = this->gpAttr.max;
             break;
         case COUNT:
-            res = this->groupAttr.count;
+            numeric = this->gpAttr.count;
             break;
         case AVG:
-            res = this->groupAttr.sum / this->groupAttr.count;
+            numeric = this->gpAttr.sum / this->gpAttr.count;
             break;
         case SUM:
-            res = this->groupAttr.sum;
+            numeric = this->gpAttr.sum;
             break;
     }
-    memcpy((char *) data + offset, &res, sizeof(float));
+    memcpy((char *) data + offset, &numeric, sizeof(float));
     this->current++;
 
     memcpy(data, nullFlags, nullFlagSize);
@@ -908,23 +938,19 @@ void Aggregate::getAttributes(vector<Attribute> &attrs) const {
     attrs.clear();
 
     if (this->groupOpFlag) {
-        string tmp = this->rel + "." + this->groupAttrVal.name;
-        Attribute attr;
-        attr.name = tmp;
-        attr.length = this->groupAttrVal.length;
-        attr.type = this->groupAttrVal.type;
+        string fullName = this->rel + "." + this->groupAttr.name;
+        Attribute attr = this->groupAttr;
+        attr.name = fullName;
         attrs.push_back(attr);
     }
 
     //Put aggregate op name;
-    string tmp = getOpName();
-    tmp += "(";
-    tmp += this->rel + "." + this->aggAttrVal.name;
-    tmp += ")";
-    Attribute attr;
-    attr.length = this->aggAttrVal.length;
-    attr.type = this->aggAttrVal.type;
-    attr.name = tmp;
+    string printName = getOpName();
+    printName += "(";
+    printName += this->rel + "." + this->aggAttr.name;
+    printName += ")";
+    Attribute attr = this->aggAttr;
+    attr.name = printName;
     attrs.push_back(attr);
 }
 
