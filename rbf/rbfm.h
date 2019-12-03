@@ -54,6 +54,7 @@ class AttrValue {
 public:
     AttrType type;
     int length;
+    string name;
     string vchar;
     int itg;
     float flt;
@@ -65,6 +66,8 @@ public:
     AttrValue(string v) : type(TypeVarChar), length(sizeof(int) + (int) v.length()), vchar(v), itg(0), flt(0) {}
 
     AttrValue() : length(0), vchar(""), itg(0), flt(0) {}
+
+    AttrValue(const Attribute &attr) : name(attr.name), type(attr.type) {}
 
     void readAttr(AttrType attrType, const void *data);
 

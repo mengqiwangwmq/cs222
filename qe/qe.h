@@ -4,6 +4,7 @@
 #include "../rbf/rbfm.h"
 #include "../rm/rm.h"
 #include "../ix/ix.h"
+#include <unordered_map>
 
 #define QE_EOF (-1)  // end of the index scan
 
@@ -306,6 +307,17 @@ public:
     void getAttributes(std::vector<Attribute> &attrs) const override {};
 };
 
+class GroupAttr {
+public:
+    GroupAttr();
+
+    float sum;
+    float count;
+    float max;
+    float min;
+    int length;
+};
+
 class Aggregate : public Iterator {
     // Aggregation operator
 public:
@@ -314,7 +326,7 @@ public:
     Aggregate(Iterator *input,          // Iterator of input R
               const Attribute &aggAttr,        // The attribute over which we are computing an aggregate
               AggregateOp op            // Aggregate operation
-    ) {};
+    );
 
     // Optional for everyone: 5 extra-credit points
     // Group-based hash aggregation
@@ -322,16 +334,43 @@ public:
               const Attribute &aggAttr,           // The attribute over which we are computing an aggregate
               const Attribute &groupAttr,         // The attribute over which we are grouping the tuples
               AggregateOp op              // Aggregate operation
-    ) {};
+    );
 
     ~Aggregate() override = default;
 
-    RC getNextTuple(void *data) override { return QE_EOF; };
+    RC getNextTuple(void *data) override;
 
     // Please name the output attribute as aggregateOp(aggAttr)
     // E.g. Relation=rel, attribute=attr, aggregateOp=MAX
     // output attrname = "MAX(rel.attr)"
-    void getAttributes(std::vector<Attribute> &attrs) const override {};
+    void getAttributes(std::vector<Attribute> &attrs) const override;
+
+    string getOpName() const;
+
+    void buildAggResult();
+
+    void buildGroupAttr(AttrValue &attrValue);
+
+    RC getAttrValueByName(const void *data, vector<AttrValue> &avals, string &attributeName, AttrValue &value);
+
+    Iterator *input;
+    int current;
+    bool groupOpFlag;
+    vector<AttrValue> attrVals;
+    AggregateOp aop;
+    AttrValue aggAttrVal;
+    AttrValue groupAttrVal;
+    string rel;
+    int mapSize;
+
+    GroupAttr groupAttr;
+    unordered_map<string, GroupAttr> vcharMap;
+    unordered_map<float, GroupAttr> fltMap;
+    unordered_map<int, GroupAttr> itgMap;
+
+    unordered_map<string, GroupAttr>::iterator vcharIter;
+    unordered_map<float, GroupAttr>::iterator fltIter;
+    unordered_map<int, GroupAttr>::iterator itgIter;
 };
 
 bool compareEqual(Attribute &attr, const void *compValue, const void *compKey);
