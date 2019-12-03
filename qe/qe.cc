@@ -814,7 +814,7 @@ void Aggregate::buildAggResult() {
     free(data);
 }
 
-RC getAttrValueByName(const void *data, vector<Attribute> &attrs, string &attrName, void *value) {
+RC Aggregate::getAttrValueByName(const void *data, vector<Attribute> &attrs, string &attrName, void *value) {
     int pos;
     for (pos = 0; pos < attrs.size(); pos++) {
         if (attrs[pos].name == attrName) {
