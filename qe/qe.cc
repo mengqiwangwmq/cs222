@@ -716,6 +716,7 @@ void Aggregate::buildAggResult() {
             this->buildGroupAttr(this->aggAttrVal);
         }
     }
+    free(data);
 }
 
 RC Aggregate::getAttrValueByName(const void *data, vector<AttrValue> &avals, string &attributeName, AttrValue &value) {
@@ -751,11 +752,11 @@ RC Aggregate::getAttrValueByName(const void *data, vector<AttrValue> &avals, str
         if (nullBit) {
             continue;
         }
-        offset += attrVals[i].length;
         if (i == pos) {
             value.readAttr(value.type, (char *) data + offset);
             break;
         }
+        offset += attrVals[i].length;
     }
     free(nullFlags);
     return 0;
