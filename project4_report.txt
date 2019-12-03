@@ -1,11 +1,11 @@
 1. Basic information
-Team number (e.g., 01) : 
-#1 Student ID : 
-#1 Student Name : 
-#2 Student ID : 
-#2 Student Name : 
-OS (bit) :
-gcc version :
+Team number (e.g., 01) : 07
+#1 Student ID : szeng5
+#1 Student Name : Shi Zeng
+#2 Student ID : mengqw3
+#2 Student Name : Mengqi Wang
+OS (bit) : 64-bit
+gcc version : 5.4.0
 
 
 2. Catalog information about Index
@@ -28,7 +28,13 @@ First, we iterator through the left table to read one tuple at one time. Then we
 
 
 6. Aggregation
-- Describe how your aggregation (basic, group-based hash) works.
+Baisc Aggregate:
+    We use a class called GroupAttr to store the aggregate information of input attribute. which contains aggregate value information sum, count, min, max.
+    Each call of getNextTuple accumulates the searched aggregate attribute information to the GroupAttr object, and output the aggregate information.
+Group Aggregate:
+    Apart from the aggregate attribute, an additional group attribute is provided. Based on the group attribute, three unordered hash map is created to build a map between the attribute value and GroupAttr aggregate information.
+    Each hashmap maps a type of attribute value separately of TypeInt, TypeReal, TypeVarChar.
+    The aggregate class use the iterator of these maps to loop through aggregated attributes, and output aggregate information in the getNextTuple function.
 
 
 7. Implementation Detail
