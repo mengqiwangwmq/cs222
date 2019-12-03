@@ -10,15 +10,18 @@ gcc version :
 
 2. Catalog information about Index
 - Show your catalog information about an index (tables, columns). 
-
+We create a table called "Index". The "Index" table has two attributes, one is the tableId(int), the other is indexFileName(varchar). When create a catalog, we create "Index" file as well and store the information to catalog tabls, "Tables" and "Columns".
+When adding an index, we store its tableId and indexFileName to "Index".
 
 3. Block Nested Loop Join (If you have implemented this feature)
 - Describe how your block nested loop join works (especially, how you manage the given buffers.)
-
+First, we allocate a memory with size of NumPages * PAGE_SIZE. Then we use left iterator to iterate through the left table and load the tuple to the block. In the meanwhile, we use a vector<int> to record the offset of each tuple, which is actually the end position of the tuple.
+After loading the block, we use the right iterator to iterate through the right table and get each tuple at one time. Then we compare the right tuple with each of the left tuple in the block. If there is a match, we concatenate the two tuples and return the result. If the right tuple has been compared with all the tuples in the block, we read the next right tuple. If we have iterator throught the right table, we load the next block. If this load operation returns QE_EOF, which means we have completed the join operation, we return QE_EOF.
+To decide if left and right tuple could be joined, we extract the compared key value and compare them, and it is the same for other compares in our implementation.
 
 4. Index Nested Loop Join (If you have implemented this feature)
 - Describe how your grace hash join works.
-
+First, we iterator through the left table to read one tuple at one time. Then we extract the compared key value and use this value to set the right index iterator(low: leftKey, hight: leftKey, lowInclusice: true, highInclusive: true). Then we get the right tuple using the index iterator utility. If there is a hit, we concantenate the left and right tuples. If the right iterator returns QE_EOF, we read the next left tuple and reset the right iterator according to the new compared key in left tuple. After we iterate throught the left table, we are done index join and return QE_EOF.
 
 5. Grace Hash Join (If you have implemented this feature)
 - Describe how your grace hash join works (especially, in-memory structure).
@@ -30,7 +33,7 @@ gcc version :
 
 7. Implementation Detail
 - Have you added your own source file (.cc or .h)?
-
+No
 - Have you implemented any optional features? Then, describe them here.
 
 - Other implementation details:
