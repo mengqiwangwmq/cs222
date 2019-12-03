@@ -753,10 +753,10 @@ RC Aggregate::getAttrValueByName(const void *data, vector<AttrValue> &avals, str
             continue;
         }
         if (i == pos) {
-            value.readAttr(value.type, (char *) data + offset);
+            value.readAttr(avals[i].type, (char *) data + offset);
             break;
         }
-        offset += attrVals[i].length;
+        offset += avals[i].length;
     }
     free(nullFlags);
     return 0;
