@@ -932,6 +932,7 @@ RC Aggregate::getNextTuple(void *data) {
 
     memcpy(data, nullFlags, nullFlagSize);
     free(nullFlags);
+    return 0;
 }
 
 void Aggregate::getAttributes(vector<Attribute> &attrs) const {

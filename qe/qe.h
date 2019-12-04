@@ -353,7 +353,7 @@ public:
     RC getAttrValueByName(const void *data, vector<Attribute> &attrs, string &attrName, void *value);
 
     Iterator *input;
-    int current;
+    int current = 0;
     bool groupOpFlag;
     vector<Attribute> attrs;
     AggregateOp aop;
