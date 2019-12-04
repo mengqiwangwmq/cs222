@@ -43,7 +43,8 @@ No
 - Have you implemented any optional features? Then, describe them here.
 
 - Other implementation details:
-
+For Filter, we iterate through the table, extract the compared attribute value, compare it with the filter key value. If there is a match, we return this tuple, else we continue iterating.
+For project, we iterate throught the table, extract the attributes according to the project attributes.
 
 6. Other (optional)
 - Freely use this section to tell us about things that are related to the project 4, but not related to the other sections (optional)
