@@ -84,7 +84,7 @@ RC IndexManager::split(IXFileHandle &ixFileHandle, vector<Node *> &route) {
         newLeaf.nodeType = Leaf;
         newLeaf.overFlowPages = node->overFlowPages;
 
-        int mid = node->keys.size() / 2;
+        int mid = (int) ceil(node->keys.size() / 2.0);
         for (int i = mid; i < node->keys.size(); i++) {
             newLeaf.keys.emplace_back(node->keys[i]);
             newLeaf.pointers.emplace_back(node->pointers[i]);
@@ -117,7 +117,7 @@ RC IndexManager::split(IXFileHandle &ixFileHandle, vector<Node *> &route) {
         Node newInter = Node(node->attrType);
         newInter.nodeType = node->nodeType;
         // Strictly less than when comes to intermediate node
-        int mid = node->keys.size() / 2;
+        int mid = (int) ceil(node->keys.size() / 2.0);
         for (int i = mid + 1; i < node->keys.size(); i++) {
             newInter.keys.emplace_back(node->keys[i]);
             newInter.children.emplace_back(node->children[i]);
@@ -151,7 +151,7 @@ RC IndexManager::split(IXFileHandle &ixFileHandle, vector<Node *> &route) {
         newLeaf2.nodeType = Leaf;
         newLeaf1.overFlowPages = node->overFlowPages;
         newLeaf2.overFlowPages = node->overFlowPages;
-        int mid = node->keys.size() / 2;
+        int mid = (int) ceil(node->keys.size() / 2.0);
         for (int i = 0; i < node->keys.size(); i++) {
             if (i < mid) {
                 newLeaf1.keys.emplace_back(node->keys[i]);
@@ -181,7 +181,7 @@ RC IndexManager::split(IXFileHandle &ixFileHandle, vector<Node *> &route) {
         Node newInter2 = Node(node->attrType);
         newInter1.nodeType = Intermediate;
         newInter2.nodeType = Intermediate;
-        int mid = node->keys.size() / 2;
+        int mid = (int) ceil(node->keys.size() / 2.0);
         // TODO: Index leaves out mid key
         for (int i = 0; i < node->keys.size(); i++) {
             if (i < mid) {
